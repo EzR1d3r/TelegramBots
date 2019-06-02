@@ -130,31 +130,29 @@ class WikiBot:
                     'action':"query",
                     'list':"search",
                     'srsearch': SEARCHPAGE,
-                    'format':"json"
+                    'format':"json",
+                    'srprop':'redirecttitle',
                 }
 
         R = S.get(url=URL, params=PARAMS)
         DATA = R.json()
-        
         search_result =  DATA['query']['search']
 
-        if len(search_result):
-            title = search_result[0].get('title')
-            return f"https://ru.wikipedia.org/wiki/{title}"
+        if not len(search_result):
+            return f"Cant find something for {text} in wiki..."
         
-        
-        return f"Cant find something for {text} in wiki..."
+        title = search_result[0].get('title')
+        title = title.replace(' ', '_')
+        return f"https://ru.wikipedia.org/wiki/{title}"
 
     def unknown(self, cmd):
         return f"Unknown command {cmd}"
 
 
 def main():
-
     handler = WikiBot()
     processor = BotProcessor(wiki_bot_token, handler)
     processor.process()
-
 
 if __name__ == '__main__':  
     try:
