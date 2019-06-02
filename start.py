@@ -47,6 +47,8 @@ class BotProcessor:
         self.session.proxies = proxies
         self.offset = 0
 
+        self.get_updates() #clear updates
+
     def get_updates(self, timeout=0):
         params = {'timeout': timeout, 'offset': self.offset}
         query  = f"{self.api_url}getUpdates"
@@ -87,6 +89,7 @@ class BotProcessor:
                 self.handle_update(up)
             except Exception as ex:
                 self.logger.log_error( f"{ex}:\n {str(up)}" )
+                print( f"Exception {ex}")
 
     def process(self):
         while True:
@@ -95,6 +98,7 @@ class BotProcessor:
                 self.handle_updates( updates )
             except Exception as ex:
                 self.logger.log_error( ex )
+                print( f"Exception {ex}")
 
 
 class WikiBot:
@@ -111,14 +115,35 @@ class WikiBot:
         return result
 
     def exec_text(self, text):
-        return f"https://ru.wikipedia.org/wiki/{text}"
+        return self.find(text)
 
     def help(self, text):
         return "WikiBot for searching articles direct from Telegram"
 
     def find(self, text):
-        return f"https://ru.wikipedia.org/wiki/{text}"
-        # return f"Searching for {text} in wiki..."
+        # return f"https://ru.wikipedia.org/wiki/{text}"
+
+        S = requests.Session()
+        URL = "https://ru.wikipedia.org/w/api.php"
+        SEARCHPAGE = text
+        PARAMS = {
+                    'action':"query",
+                    'list':"search",
+                    'srsearch': SEARCHPAGE,
+                    'format':"json"
+                }
+
+        R = S.get(url=URL, params=PARAMS)
+        DATA = R.json()
+        
+        search_result =  DATA['query']['search']
+
+        if len(search_result):
+            title = search_result[0].get('title')
+            return f"https://ru.wikipedia.org/wiki/{title}"
+        
+        
+        return f"Cant find something for {text} in wiki..."
 
     def unknown(self, cmd):
         return f"Unknown command {cmd}"
