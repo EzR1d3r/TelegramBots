@@ -1,8 +1,9 @@
+#!/usr/bin/python3.7
+
 import requests
-import datetime
 import time
-
-
+import datetime
+import os
 
 wiki_bot_token = "715818372:AAFPZmjThAvLEHqcjEXDaKwuFRW-PLjmvLs"
 proxies =   {
@@ -10,70 +11,125 @@ proxies =   {
                 "https": "104.248.51.47:8080",
             }
 
-class BotHandler:
+#list of commands (have to be sent to FatherBot for current bot)
+# help - Description
+# find - Find the article in wikipedia.org
 
-    def __init__(self, token):
+class BotLogger():
+    def __init__(self, folderPath = ".logs"):
+        self.path = folderPath
+
+        if not os.path.exists(folderPath):
+            os.makedirs(folderPath)
+
+    def log(self, text, ext=".log"):
+        date = datetime.datetime.now()
+
+        sDateTime = date.strftime('%d_%b_%Y_%H:%M:%S')
+        fPath = f"{self.path}/{ date.strftime('%d_%b_%Y') }{ext}"
+
+        with open(fPath, 'a') as file:
+            file.write( f"{sDateTime}:\n{text}\n\n" )
+
+    def log_error(self, text):
+        text = f"ERROR:\n{text}"
+        self.log(text, ext=".err_log")
+
+
+class BotProcessor:
+    def __init__(self, token, handler):
         self.token = token
+        self.handler = handler
+        self.logger = BotLogger()
         self.api_url = f"https://api.telegram.org/bot{token}/"
 
         self.session = requests.Session()
         self.session.proxies = proxies
+        self.offset = 0
 
-    def get_updates(self, offset=None, timeout=1000):
-        method = 'getUpdates'
-        params = {'timeout': timeout, 'offset': offset}
-        query  = self.api_url + method
+    def get_updates(self, timeout=0):
+        params = {'timeout': timeout, 'offset': self.offset}
+        query  = f"{self.api_url}getUpdates"
         resp = self.session.get(query, params=params)
         result_json = resp.json()['result']
+        if len(result_json): self.offset = result_json[-1]['update_id'] + 1
         return result_json
 
     def send_message(self, chat_id, text):
         params = {'chat_id': chat_id, 'text': text}
-        method = 'sendMessage'
-        resp = self.session.post(self.api_url + method, params)
+        resp = self.session.post( f"{self.api_url}sendMessage", params )
         return resp
 
-    def get_last_update(self):
-        get_result = self.get_updates()
+    def handle_update(self, update):
+        text     = update['message']['text']
+        chat_id  = update['message']['chat']['id']
+        if text == "ex": raise Exception('Test exception')
 
-        if len(get_result) > 0:
-            last_update = get_result[-1]
+        if text.startswith('/'):
+            l = text.split(' ')
+            cmd = l[0]
+            text = " ".join( l[1:] )
+
+            response_txt = self.handler.exec_cmd( cmd, text )
         else:
-            last_update = get_result[len(get_result)]
+            response_txt = self.handler.exec_text( text )
 
-        return last_update
+
+        if response_txt != "":
+            self.send_message( chat_id, response_txt )
+
+        self.logger.log( str(update) )
+        self.logger.log( f"Response: {response_txt}" ) 
+
+    def handle_updates(self, updates):
+        for up in updates:
+            try:
+                self.handle_update(up)
+            except Exception as ex:
+                self.logger.log_error( f"{ex}:\n {str(up)}" )
+
+    def process(self):
+        while True:
+            try:
+                updates = self.get_updates()
+                self.handle_updates( updates )
+            except Exception as ex:
+                self.logger.log_error( ex )
+
+
+class WikiBot:
+    def __init__(self):
+        self.commands = {
+                            "/help" : self.help,
+                            "/find" : self.find,
+                        }
+
+    def exec_cmd(self, cmd, text):
+        func = self.commands.get( cmd )
+        result = self.unknown(cmd) if func is None else func(text)
+
+        return result
+
+    def exec_text(self, text):
+        return f"https://ru.wikipedia.org/wiki/{text}"
+
+    def help(self, text):
+        return "WikiBot for searching articles direct from Telegram"
+
+    def find(self, text):
+        return f"https://ru.wikipedia.org/wiki/{text}"
+        # return f"Searching for {text} in wiki..."
+
+    def unknown(self, cmd):
+        return f"Unknown command {cmd}"
+
 
 def main():
 
-    new_offset = None
-    now = datetime.datetime.now()
-    hour = now.hour
+    handler = WikiBot()
+    processor = BotProcessor(wiki_bot_token, handler)
+    processor.process()
 
-    greet_bot = BotHandler(wiki_bot_token)  
-    greetings = ('здравствуй', 'привет', 'ку', 'здорово')  
-    
-    while True:
-        greet_bot.get_updates(new_offset)
-        last_update = greet_bot.get_last_update()
-        print( last_update )
-        print( hour )
-
-        last_update_id = last_update['update_id']
-        last_chat_text = last_update['message']['text']
-        last_chat_id = last_update['message']['chat']['id']
-        last_chat_name = last_update['message']['chat']['first_name']
-
-        if last_chat_text.lower() in greetings and 6 <= hour < 12:
-            greet_bot.send_message(last_chat_id, 'Доброе утро, {}'.format(last_chat_name))
-
-        elif last_chat_text.lower() in greetings and 12 <= hour < 17:
-            greet_bot.send_message(last_chat_id, 'Добрый день, {}'.format(last_chat_name))
-
-        elif last_chat_text.lower() in greetings and 17 <= hour <= 23:
-            greet_bot.send_message(last_chat_id, 'Добрый вечер, {}'.format(last_chat_name))
-
-        new_offset = last_update_id + 1
-        time.sleep(1)
 
 if __name__ == '__main__':  
     try:
