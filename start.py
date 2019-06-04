@@ -131,13 +131,16 @@ class WikiBot:
         if val == "":
             keyboard_list = []
             for lang in self.support_langs:
-                keyboard_list.append( [{"text": "/language:" + lang}] )
+                keyboard_list.append( {"text": "/language:" + lang} )
 
-            return { "text":         "Choose the language",
-                     "reply_markup": json.dumps({ "keyboard": keyboard_list }) }
+            return { "text":         "Choose the language zone",
+                     "reply_markup": json.dumps({   "keyboard": [keyboard_list],
+                                                    "resize_keyboard":True })
+                    }
         else:
             return { "text":         f"Choosed language: {val}",
-                     "reply_markup": json.dumps({ "remove_keyboard": True }) }
+                     "reply_markup": json.dumps({ "remove_keyboard": True })
+                    }
 
     def find(self, text):
         S = requests.Session()
