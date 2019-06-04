@@ -68,9 +68,9 @@ class BotProcessor:
         if text == "ex": raise Exception('Test exception')
 
         if text.startswith('/'):
-            response = self.handler.exec_cmd( text )
+            response = self.handler.exec_cmd( text, update )
         else:
-            response = self.handler.exec_text( text )
+            response = self.handler.exec_text( text, update )
 
         if len(response):
             self.smart_message( chat_id = chat_id, **response )
@@ -90,12 +90,9 @@ class BotProcessor:
 
     def process(self):
         while True:
-            try:
-                updates = self.get_updates()
-                self.handle_updates( updates )
-            except Exception as ex:
-                self.logger.log_error( ex )
-                print( f"Exception {ex}")
+            updates = self.get_updates()
+            self.handle_updates( updates )
+
 
 class WikiBot:
     def __init__(self):
@@ -106,18 +103,21 @@ class WikiBot:
                         }
 
         self.support_langs = ["ru", "en"]
+        self.settings = { "default":{"language":"ru"} }
+        self.update = None
 
-        self.settings = {}
+    def exec_cmd(self, cmd, update):
+        self.update = update
 
-    def exec_cmd(self, cmd):
         cmd = cmd.split(":")
         func = self.commands.get( cmd[0] )
         val = cmd[1] if len(cmd) > 1 else ""
-        result = self.unknown(cmd) if func is None else func(val)
 
+        result = self.unknown(cmd) if func is None else func(val)
         return result
 
-    def exec_text(self, text):
+    def exec_text(self, text, update):
+        self.update = update
         return self.find(text)
 
     def cmd_start(self, val):
@@ -127,24 +127,49 @@ class WikiBot:
         return {"text":"WikiBot for searching articles direct from Telegram"}
 
     def cmd_language(self, val):
-        print(val)
         if val == "":
             keyboard_list = []
             for lang in self.support_langs:
                 keyboard_list.append( {"text": "/language:" + lang} )
 
-            return { "text":         "Choose the language zone",
+            return { "text":         "Choose the language zone.\nYou may set manually by /language:my_lang",
                      "reply_markup": json.dumps({   "keyboard": [keyboard_list],
                                                     "resize_keyboard":True })
                     }
         else:
-            return { "text":         f"Choosed language: {val}",
+            chat_id  = self.update['message']['chat']['id']
+            self.update_setting(chat_id, "language", val)
+
+            return { 
+                     "text":         f"Choosed language: {val}",
                      "reply_markup": json.dumps({ "remove_keyboard": True })
                     }
 
+    def update_setting(self, chat_id, setting, value):
+        usr_st = self.settings.get(chat_id)
+        if usr_st is not None:
+            usr_st[setting] = value
+        else:
+            usr_st = {setting:value}
+        
+        self.settings[chat_id] = usr_st
+
+    def get_setting(self, chat_id, setting):
+        try:
+            return self.settings[chat_id][setting]
+        except:
+            return None
+
     def find(self, text):
+        chat_id  = self.update['message']['chat']['id']
+        lang = self.get_setting(chat_id, "language")
+        try:
+            lang = self.update['message']['from']['language_code'] if lang is None else lang
+        except:
+            lang = self.get_setting("default", "language")
+
         S = requests.Session()
-        URL = "https://ru.wikipedia.org/w/api.php"
+        URL = f"https://{lang}.wikipedia.org/w/api.php"
         SEARCHPAGE = text
         PARAMS = {
                     'action':"query",
@@ -164,21 +189,15 @@ class WikiBot:
         
         title = search_result[0].get('title')
         title = title.replace(' ', '_')
-        return {"text":f"https://ru.wikipedia.org/wiki/{title}"}
+        return {"text":f"https://{lang}.wikipedia.org/wiki/{title}"}
 
     def unknown(self, cmd):
         return {"text":f"Unknown command {cmd}"}
-
 
 def main():
     handler = WikiBot()
     processor = BotProcessor(wiki_bot_token, handler)
     processor.process()
-
-    # rem = { "remove_keyboard": True }
-    # keyboard = { "keyboard": [ [{"text": "FIRST_BUTTON"}], [{ "text": "SECOND_BUTTON"}], [{ "text": "THIRD_BUTTON"}] ] }
-
-    # processor.smart_message(chat_id = 297235225, text="!!!!!", reply_markup=json.dumps(rem))
 
 if __name__ == '__main__':  
     try:
