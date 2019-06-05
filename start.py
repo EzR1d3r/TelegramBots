@@ -84,9 +84,10 @@ class BotProcessor:
                 print( f"Exception {ex}")
 
     def process(self):
-        while True:
+        while True: #MAIN CYCLE
             updates = self.get_updates()
             self.handle_updates( updates )
+
 
 class WikiBot:
     def __init__(self):
@@ -112,10 +113,10 @@ class WikiBot:
 
     def handele_cmd(self, cmd):
         cmd = cmd.split(":")
-        func = self.commands.get( cmd[0] )
+        cmd_func = self.commands.get( cmd[0] )
         val = cmd[1] if len(cmd) > 1 else ""
 
-        result = self.unknown(cmd) if func is None else func(val)
+        result = self.unknown(cmd) if cmd_func is None else cmd_func(val)
         return result
 
     def handle_text(self, text):
@@ -129,63 +130,42 @@ class WikiBot:
 
     def cmd_language(self, val):
         if val == "":
-            keyboard_list = []
-            for lang in self.support_langs:
-                keyboard_list.append( {"text": "/language:" + lang} )
-
-            return { "text":         "Choose the language zone.\nYou may set manually by /language:my_lang",
-                     "reply_markup": json.dumps({   "keyboard": [keyboard_list],
-                                                    "resize_keyboard":True })
-                    }
+            btn_list = [[ {"text": "/language:" + lang} for lang in self.support_langs ]]
+            keyboard = {"keyboard": btn_list, "resize_keyboard": True }
+            text = "Choose the language zone.\nYou may set manually by /language:my_lang"
+            
+            return { "text":text, "reply_markup": json.dumps( keyboard ) }
         else:
             chat_id  = self.current_update['message']['chat']['id']
             self.update_setting(chat_id, "language", val)
+            reply_markup = json.dumps({ "remove_keyboard": True })
 
-            return { 
-                     "text":         f"Choosed language: {val}",
-                     "reply_markup": json.dumps({ "remove_keyboard": True })
-                    }
-
-    def update_setting(self, chat_id, setting, value):
-        usr_st = self.settings.get(chat_id)
-        if usr_st is not None:
-            usr_st[setting] = value
-        else:
-            usr_st = {setting:value}
-        
-        self.settings[chat_id] = usr_st
-
-    def get_setting(self, chat_id, setting):
-        try:
-            return self.settings[chat_id][setting]
-        except:
-            return None
+            return { "text":f"Choosed language: {val}", "reply_markup": reply_markup}
 
     def find(self, text):
         chat_id  = self.current_update['message']['chat']['id']
-        lang = self.get_setting(chat_id, "language")
         try:
-            lang = self.current_update['message']['from']['language_code'] if lang is None else lang
+            lang = self.current_update['message']['from']['language_code']
         except:
             lang = self.get_setting("default", "language")
+        lang = self.get_setting(chat_id, "language", lang)
 
-        S = requests.Session()
+        session = requests.Session()
         URL = f"https://{lang}.wikipedia.org/w/api.php"
-        SEARCHPAGE = text
+        SEARCH_TEXT = text
         PARAMS = {
                     'action':"query",
                     'list':"search",
-                    'srsearch': SEARCHPAGE,
+                    'srsearch': SEARCH_TEXT,
                     'format':"json",
                     'srprop':'redirecttitle',
                 }
 
-        R = S.get(url=URL, params=PARAMS)
-        DATA = R.json()
-        search_result =  DATA['query']['search']
+        response = session.get(url=URL, params=PARAMS)
+        search_result =  response.json()['query']['search']
 
         if not len(search_result):
-            return {"text":f"Cant find something for {text} in wiki..."}
+            return {"text":f"Cant find something for {text} in wiki...."}
         
         title = search_result[0].get('title')
         title = title.replace(' ', '_')
@@ -193,6 +173,20 @@ class WikiBot:
 
     def unknown(self, cmd):
         return {"text":f"Unknown command {cmd}"}
+
+    def update_setting(self, chat_id, setting, value):
+        usr_setting = self.settings.get(chat_id)
+        
+        if usr_setting is not None: usr_setting[setting] = value
+        else: usr_setting = {setting:value}
+        
+        self.settings[chat_id] = usr_setting
+
+    def get_setting(self, chat_id, setting, alt_val = None):
+        try:
+            return self.settings[chat_id][setting]
+        except KeyError:
+            return self.settings["default"]["language"] if alt_val is None else alt_val
 
 def main():
     handler = WikiBot()
