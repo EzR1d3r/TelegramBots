@@ -12,8 +12,13 @@ proxies =   {
                 "https": "104.248.51.47:8080",
             }
 
+
+def projectDir():
+    return os.path.abspath( os.curdir ) + "/"
+
 class BotLogger():
-    def __init__(self, folderPath = ".logs"):
+    def __init__(self, folderPath = ""):
+        folderPath = projectDir() + ".logs" if not folderPath else folderPath
         self.path = folderPath
 
         if not os.path.exists(folderPath):
@@ -182,7 +187,6 @@ class WikiBot:
 
         R = S.get(url=URL, params=PARAMS)
         DATA = R.json()
-        # print(DATA)
         search_result =  DATA['query']['search']
 
         if not len(search_result):
