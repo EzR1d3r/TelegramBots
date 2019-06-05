@@ -12,10 +12,6 @@ proxies =   {
                 "https": "104.248.51.47:8080",
             }
 
-#list of commands (have to be sent to FatherBot for current bot)
-# help - Description
-# find - Find the article in wikipedia.org
-
 class BotLogger():
     def __init__(self, folderPath = ".logs"):
         self.path = folderPath
@@ -96,6 +92,11 @@ class BotProcessor:
 
 class WikiBot:
     def __init__(self):
+
+    #list of commands (have to be sent to FatherBot, look /setcommands)
+    # help - Description
+    # language - Choose the language zone
+
         self.commands = {
                             "/start"    : self.cmd_start,
                             "/help"     : self.cmd_help,
@@ -185,7 +186,7 @@ class WikiBot:
         search_result =  DATA['query']['search']
 
         if not len(search_result):
-            return f"Cant find something for {text} in wiki..."
+            return {"text":f"Cant find something for {text} in wiki..."}
         
         title = search_result[0].get('title')
         title = title.replace(' ', '_')
