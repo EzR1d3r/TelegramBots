@@ -1,4 +1,5 @@
 #!/usr/bin/python3.7
+#https://core.telegram.org/bots/api
 
 import requests
 import time
@@ -52,8 +53,8 @@ class BotProcessor:
         self.get_updates() #clear updates
 
     def get_updates(self, timeout=0):
-        params = {'timeout': timeout, 'offset': self.offset}
         query  = f"{self.api_url}getUpdates"
+        params = {'timeout': timeout, 'offset': self.offset}
         resp = self.session.get(query, params=params)
         result_json = resp.json()['result']
         if len(result_json): self.offset = result_json[-1]['update_id'] + 1
@@ -64,29 +65,22 @@ class BotProcessor:
         return resp
 
     def handle_update(self, update):
-        text     = update['message']['text']
-        chat_id  = update['message']['chat']['id']
-        if text == "ex": raise Exception('Test exception')
 
-        if text.startswith('/'):
-            response = self.handler.exec_cmd( text, update )
-        else:
-            response = self.handler.exec_text( text, update )
+        chat_id  = update['message']['chat']['id']
+        response = self.handler.handle(update)
 
         if len(response):
             self.smart_message( chat_id = chat_id, **response )
-
-        print(update)
 
         self.logger.log( str(update) )
         self.logger.log( f"Response: {str(response)}" ) 
 
     def handle_updates(self, updates):
-        for up in updates:
+        for upd in updates:
             try:
-                self.handle_update(up)
+                self.handle_update(upd)
             except Exception as ex:
-                self.logger.log_error( f"{ex}:\n {str(up)}" )
+                self.logger.log_error( f"{ex}:\n {str(upd)}" )
                 print( f"Exception {ex}")
 
     def process(self):
@@ -94,13 +88,12 @@ class BotProcessor:
             updates = self.get_updates()
             self.handle_updates( updates )
 
-
 class WikiBot:
     def __init__(self):
 
-    #list of commands (have to be sent to FatherBot, look /setcommands)
-    # help - Description
-    # language - Choose the language zone
+        #list of commands (have to be sent to FatherBot, look /setcommands)
+        #help - Description
+        #language - Choose the language zone
 
         self.commands = {
                             "/start"    : self.cmd_start,
@@ -110,11 +103,14 @@ class WikiBot:
 
         self.support_langs = ["ru", "en"]
         self.settings = { "default":{"language":"ru"} }
-        self.update = None
+        self.current_update = None
 
-    def exec_cmd(self, cmd, update):
-        self.update = update
+    def handle(self, update):
+        self.current_update = update
+        text = update['message']['text']
+        return self.handele_cmd(text) if text.startswith('/') else self.handle_text(text)
 
+    def handele_cmd(self, cmd):
         cmd = cmd.split(":")
         func = self.commands.get( cmd[0] )
         val = cmd[1] if len(cmd) > 1 else ""
@@ -122,8 +118,7 @@ class WikiBot:
         result = self.unknown(cmd) if func is None else func(val)
         return result
 
-    def exec_text(self, text, update):
-        self.update = update
+    def handle_text(self, text):
         return self.find(text)
 
     def cmd_start(self, val):
@@ -143,7 +138,7 @@ class WikiBot:
                                                     "resize_keyboard":True })
                     }
         else:
-            chat_id  = self.update['message']['chat']['id']
+            chat_id  = self.current_update['message']['chat']['id']
             self.update_setting(chat_id, "language", val)
 
             return { 
@@ -167,10 +162,10 @@ class WikiBot:
             return None
 
     def find(self, text):
-        chat_id  = self.update['message']['chat']['id']
+        chat_id  = self.current_update['message']['chat']['id']
         lang = self.get_setting(chat_id, "language")
         try:
-            lang = self.update['message']['from']['language_code'] if lang is None else lang
+            lang = self.current_update['message']['from']['language_code'] if lang is None else lang
         except:
             lang = self.get_setting("default", "language")
 
