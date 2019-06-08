@@ -1,5 +1,6 @@
 [Unit]
 Description=TEST_DAEMON SERVICE
+StartLimitIntervalSec=0
  
 [Install]
 WantedBy=multi-user.target
@@ -8,7 +9,8 @@ WantedBy=multi-user.target
 Type=simple
 PIDFile=/var/run/test_daemon.pid
 WorkingDirectory=/home/username/daemons
-ExecStart=/home/username/daemons/TEST_DAEMON.py
+ExecStart=/home/username/daemons/TEST_DAEMON.sh
+ExecStop=/home/username/daemons/TEST_DAEMON.py
 TimeoutSec=10
 Restart=always
 
