@@ -11,7 +11,9 @@ SETT_FULL_PATH  = os.path.join( SETT_DIR, f"{MAIN_FNAME}.json" )
 
 DEF_BOT_SETT = { "bot":
                         {
-                            "language":"ru"
+                            "language"  : "ru",
+                            "use_proxy" : False,
+                            "proxy_list": { "http":[], "https":[] },
                         }
                 }
 DEF_USR_SETT = { "language":"ru" }
