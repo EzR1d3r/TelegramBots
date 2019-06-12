@@ -1,7 +1,8 @@
 import json
 import requests
 
-from lib.SettingsManager import SettingsManager as SM
+from lib.UserDataManager import UserDataManager as UDM
+from lib.UserDataManager import DEF_USER_DATA
 
 class WikiBot:
     def __init__(self):
@@ -18,7 +19,6 @@ class WikiBot:
 
         self.support_langs = ["ru", "en"]
         self.current_update = None
-        SM.load()
 
     def handle(self, update):
         self.current_update = update
@@ -51,15 +51,17 @@ class WikiBot:
             return { "text":text, "reply_markup": json.dumps( keyboard ) }
         else:
             chat_id  = self.current_update['message']['chat']['id']
-            SM.update_usr_setting(chat_id, "language", val)
+            UDM.update(chat_id, {"language":val})
             reply_markup = json.dumps({ "remove_keyboard": True })
 
             return { "text":f"Choosed language: {val}", "reply_markup": reply_markup}
 
     def find(self, text):
         chat_id  = self.current_update['message']['chat']['id']
-        alt_val_expr = lambda : self.current_update['message']['from']['language_code']
-        lang = SM.get_usr_setting(chat_id, "language", alt_val_expr=alt_val_expr )
+
+        get_lang_from_msg = lambda : self.current_update['message']['from']['language_code']
+        lang = UDM.get( str(chat_id), "language", alt_val_expr=get_lang_from_msg )
+        lang = DEF_USER_DATA["language"] if lang is None else lang
 
         session = requests.Session()
         URL = f"https://{lang}.wikipedia.org/w/api.php"

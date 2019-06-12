@@ -1,5 +1,9 @@
 import sys
+import os
 import datetime
+import __main__
+
+MAIN_FNAME      = os.path.basename( __main__.__file__ ).replace( ".py", "" )
 
 def projectDir():
     return sys.path[0]
