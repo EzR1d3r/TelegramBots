@@ -49,7 +49,7 @@ class JSONFileHandler:
             json.dump(self.__dict_obj, f, indent=4)
 
     def update(self, key, value):
-        self.__dict_obj[ str(key) ] = json.dumps(value)
+        self.__dict_obj[ str(key) ] = json.loads( json.dumps(value) )
         self.__save()
 
     def get(self, *keys, alt_val_expr = lambda:None):
@@ -59,6 +59,7 @@ class JSONFileHandler:
             val = self.__dict_obj
             for key in keys:
                 val = val[key]
+            return val
         except KeyError:
             try:
                 return alt_val_expr()

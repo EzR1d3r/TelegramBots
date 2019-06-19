@@ -56,12 +56,17 @@ class WikiBot:
 
             return { "text":f"Choosed language: {val}", "reply_markup": reply_markup}
 
-    def find(self, text):
+    def __usr_lang(self):
         chat_id  = self.current_update['message']['chat']['id']
 
         get_lang_from_msg = lambda : self.current_update['message']['from']['language_code']
         lang = UDM.get( str(chat_id), "language", alt_val_expr=get_lang_from_msg )
         lang = DEF_USER_DATA["language"] if lang is None else lang
+
+        return lang
+
+    def find(self, text):
+        lang = self.__usr_lang()
 
         session = requests.Session()
         URL = f"https://{lang}.wikipedia.org/w/api.php"
@@ -74,7 +79,11 @@ class WikiBot:
                     'srprop':'redirecttitle',
                 }
 
-        response = session.get(url=URL, params=PARAMS)
+        try:
+            response = session.get(url=URL, params=PARAMS)
+        except requests.exceptions.ConnectionError:
+            return {"text":f"ConnectionError {URL}. Perhaps wrong language: {lang}."}
+
         search_result =  response.json()['query']['search']
 
         if not len(search_result):

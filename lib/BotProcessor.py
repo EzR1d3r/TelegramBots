@@ -51,7 +51,7 @@ class BotProcessor:
                 self.handle_update(upd)
             except Exception as ex:
                 self.logger.log_error( f"{ex}:\n {str(upd)}" )
-                print( f"Exception {ex}")
+                print( f"Exception {type(ex)} {ex}")
 
     def process(self):
         while True: #MAIN CYCLE

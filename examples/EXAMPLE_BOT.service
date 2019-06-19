@@ -1,0 +1,20 @@
+[Unit]
+Description=EXAMPLE_BOT_SERVICE
+StartLimitIntervalSec = 0
+ 
+[Install]
+WantedBy=multi-user.target
+ 
+[Service]
+Type=forking
+User = username
+WorkingDirectory=/home/username/bots
+ExecStart=/home/username/bots/scripts/EXAMPLE_BOT.sh
+Restart=always
+RestartSec=10s
+
+# info: https://linuxoid.pro/autostart-using-systemd/
+# put to /etc/systemd/system/EXAMPLE_BOT.service
+# sudo systemctl status myservice
+# sudo systemctl enable myservice
+# sudo systemctl start myservice
