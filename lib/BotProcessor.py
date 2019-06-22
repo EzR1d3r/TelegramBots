@@ -3,11 +3,8 @@ import requests
 import time
 
 from .BotLogger import BotLogger
-
-proxies =   {
-                "http": "192.33.31.130:80",
-                "https": "104.248.51.47:8080",
-            }
+from .Utils import min_ping_host
+from lib.SettingsManager import SettingsManager as SM
 
 class BotProcessor:
     def __init__(self, token, handler):
@@ -17,11 +14,25 @@ class BotProcessor:
         self.api_url = f"https://api.telegram.org/bot{token}/"
 
         self.session = requests.Session()
-        self.session.proxies = proxies
         self.offset = 0
 
+        self.load_settings()
         self.get_updates() #clear updates
 
+    def load_settings(self):
+        if SM.get( "net", "use_proxy" ):
+            proxies = {}
+            http_proxys = SM.get( "net", "proxy_list", "http" )
+            https_proxys = SM.get( "net", "proxy_list", "https" )
+
+            http, https = min_ping_host( http_proxys ), min_ping_host( https_proxys )
+
+            if http is not None: proxies["http"] = http
+            if https is not None: proxies["https"] = https
+
+            print( "1111111111111111111111", proxies )
+            self.session.proxies = proxies
+    
     def get_updates(self, timeout=0):
         query  = f"{self.api_url}getUpdates"
         params = {'timeout': timeout, 'offset': self.offset}

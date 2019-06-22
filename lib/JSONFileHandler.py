@@ -16,6 +16,7 @@ class JSONFileHandler:
         self.__file_damaged = False
 
         self.load()
+        self.__save() #create defaults if no settings exist
 
     def load( self ):
         try:
