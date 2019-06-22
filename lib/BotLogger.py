@@ -20,3 +20,7 @@ class BotLogger():
     def log_error(self, text):
         text = f"ERROR: {text}"
         self.log(text, ext=".err_log")
+
+    def log_warning(self, text):
+        text = f"WARNING: {text}"
+        self.log(text, ext=".err_log")
