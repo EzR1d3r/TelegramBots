@@ -1,6 +1,6 @@
 import os
 import datetime
-from .Utils import projectDir, datetime_std_format, date_std_format
+from .Utils import projectDir, datetime_std_format, date_std_format, MAIN_FNAME
 
 class BotLogger():
     def __init__(self, dirPath = "logs"):
@@ -12,7 +12,7 @@ class BotLogger():
 
     def log(self, text, ext=".log"):
         dt = datetime_std_format()
-        fPath = os.path.join( self.path, f"{ date_std_format() }{ ext }" )
+        fPath = os.path.join( self.path, f"{MAIN_FNAME}_{ date_std_format() }{ ext }" )
 
         with open(fPath, 'a') as file:
             file.write( f"{dt}:\n{text}\n\n" )

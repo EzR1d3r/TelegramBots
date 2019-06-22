@@ -4,7 +4,8 @@ import datetime
 import __main__
 import pythonping as pp #https://pypi.org/project/pythonping/
 
-MAIN_FNAME      = os.path.basename( __main__.__file__ ).replace( ".py", "" )
+MAIN_FNAME = os.path.basename( __main__.__file__ ).replace( ".py", "" )
+TOKEN_DIR = ".tokens"
 
 def projectDir():
     return sys.path[0]
@@ -21,6 +22,8 @@ def datetime_std_format(time_sep=":"):
     return dt
 
 def min_ping_host( hosts, timeout = 0.5 ):
+    # Attention! If proxy list or timeout is too large (or both),
+    # application may starts pretty long time because of waiting timeout.
     min_ping, ip = 1000 * timeout, None
     
     for host in hosts:

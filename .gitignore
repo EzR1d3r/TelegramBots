@@ -1,13 +1,13 @@
 # VS Code settings
-
 .vscode/
 
- #######
+ ### Telegram bot ignore ####
 .logs/
 logs/
 settings/
 users_data/
 scripts/
+*.token
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

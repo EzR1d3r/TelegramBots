@@ -1,22 +1,28 @@
 import json
 import requests
 import time
+import os
 
 from .BotLogger import BotLogger
 from .Utils import min_ping_host
 from lib.SettingsManager import SettingsManager as SM
+from .Utils import projectDir, MAIN_FNAME, TOKEN_DIR
+
+TOKEN_DEF_PATH = os.path.join( projectDir(), TOKEN_DIR, f"{MAIN_FNAME}.token" )
 
 class BotProcessor:
-    def __init__(self, token, handler):
-        self.token = token
-        self.handler = handler
+    def __init__(self, handler, tokenPath = None):
         self.logger = BotLogger()
-        self.api_url = f"https://api.telegram.org/bot{token}/"
-
+        self.handler = handler
+        
         self.session = requests.Session()
         self.offset = 0
 
         self.load_settings()
+        
+        self.token = self.load_token()
+        self.api_url = f"https://api.telegram.org/bot{self.token}/"
+
         self.get_updates() #clear updates
 
     def load_settings(self):
@@ -28,18 +34,35 @@ class BotProcessor:
             http, https = min_ping_host( http_proxys ), min_ping_host( https_proxys )
 
             if http is not None: proxies["http"] = http
+            else: self.logger.log_error( "WARNING: all http proxys is not available" )
+            
             if https is not None: proxies["https"] = https
+            else: self.logger.log_error( "WARNING: all https proxys is not available" )
 
-            print( "1111111111111111111111", proxies )
             self.session.proxies = proxies
-    
+
+    def load_token(self, tokenPath = None):
+        if tokenPath is None: tokenPath = TOKEN_DEF_PATH
+
+        try:
+            with open(tokenPath, 'r') as file:
+                t = file.read()
+        except:
+            self.logger.log_error("ERROR: cant read token-file: {tokenPath}")
+
+        return t
+
     def get_updates(self, timeout=0):
         query  = f"{self.api_url}getUpdates"
         params = {'timeout': timeout, 'offset': self.offset}
         resp = self.session.get(query, params=params)
-        result_json = resp.json()['result']
-        if len(result_json): self.offset = result_json[-1]['update_id'] + 1
-        return result_json
+        if resp:
+            result_json = resp.json()['result']
+            if len(result_json): self.offset = result_json[-1]['update_id'] + 1
+            return result_json
+        else:
+            self.logger.log_error(f"ERROR: { resp }")
+            return {}
 
     def smart_message(self, **kwargs):
         resp = self.session.post( f"{self.api_url}sendMessage", kwargs )
