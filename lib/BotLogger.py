@@ -18,5 +18,5 @@ class BotLogger():
             file.write( f"{dt}:\n{text}\n\n" )
 
     def log_error(self, text):
-        text = f"ERROR:\n{text}"
+        text = f"ERROR: {text}"
         self.log(text, ext=".err_log")

@@ -47,22 +47,18 @@ class BotProcessor:
         try:
             with open(tokenPath, 'r') as file:
                 t = file.read()
+            return t
         except:
-            self.logger.log_error("ERROR: cant read token-file: {tokenPath}")
-
-        return t
+            self.logger.log_error(f"cant read token-file: {tokenPath}")
+            raise
 
     def get_updates(self, timeout=0):
-        query  = f"{self.api_url}getUpdates"
+        query  = f"{self.api_url}getUpdates" #TODO: const string
         params = {'timeout': timeout, 'offset': self.offset}
         resp = self.session.get(query, params=params)
-        if resp:
-            result_json = resp.json()['result']
-            if len(result_json): self.offset = result_json[-1]['update_id'] + 1
-            return result_json
-        else:
-            self.logger.log_error(f"ERROR: { resp }")
-            return {}
+        updates = resp.json()['result']
+        if len(updates): self.offset = updates[-1]['update_id'] + 1
+        return updates
 
     def smart_message(self, **kwargs):
         resp = self.session.post( f"{self.api_url}sendMessage", kwargs )
