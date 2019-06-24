@@ -4,12 +4,14 @@ import datetime
 import __main__
 import pythonping as pp #https://pypi.org/project/pythonping/
 
-MAIN_FNAME = os.path.basename( __main__.__file__ ).replace( ".py", "" )
-TOKEN_DIR = ".tokens"
 
 def projectDir():
     return sys.path[0]
     # return os.path.abspath( os.curdir ) + "/"
+
+MAIN_FNAME = os.path.basename( __main__.__file__ ).replace( ".py", "" )
+TOKEN_DIR = ".tokens"
+TOKEN_DEF_PATH = os.path.join( projectDir(), TOKEN_DIR, f"{MAIN_FNAME}.token" )
 
 def date_std_format():
     date = datetime.datetime.now()
@@ -24,7 +26,7 @@ def datetime_std_format(time_sep=":"):
 def min_ping_host( hosts, timeout = 0.5 ):
     # Attention! If proxy list or timeout is too large (or both),
     # application may starts pretty long time because of waiting timeout.
-    min_ping, ip = 1000 * timeout, None
+    min_ping, IP = (1000 * timeout), None
     
     for host in hosts:
         host = host.split(':')
@@ -33,6 +35,6 @@ def min_ping_host( hosts, timeout = 0.5 ):
         avg_ping = resList.rtt_avg_ms
 
         if True in success and avg_ping < min_ping:
-            min_ping, ip = avg_ping, ':'.join( host )
+            min_ping, IP = avg_ping, ':'.join( host )
 
-    return ip
+    return IP

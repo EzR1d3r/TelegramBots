@@ -6,11 +6,9 @@ import os
 from .BotLogger import BotLogger
 from .Utils import min_ping_host
 from lib.SettingsManager import SettingsManager as SM
-from .Utils import projectDir, MAIN_FNAME, TOKEN_DIR
+from .Utils import TOKEN_DEF_PATH
 
-TOKEN_DEF_PATH = os.path.join( projectDir(), TOKEN_DIR, f"{MAIN_FNAME}.token" )
-
-class TelegramAPI:
+class TelegramBotAPI:
     def __init__ (self, telegram_api_url, token):
         #not all available commands
         #https://core.telegram.org/bots/api#available-methods
@@ -30,7 +28,7 @@ class BotProcessor:
         self.load_settings()
         
         self.token = self.load_token()
-        self.api = TelegramAPI( telegram_api_url= "https://api.telegram.org", token = self.token )
+        self.api = TelegramBotAPI( telegram_api_url= "https://api.telegram.org", token = self.token )
 
         self.process_status = self.get_me() is not False
 
@@ -47,7 +45,7 @@ class BotProcessor:
             
             if https is not None: proxies["https"] = https
             else: self.logger.log_warning( "all https proxys is not available" )
-
+            
             self.session.proxies = proxies
 
     def load_token(self, tokenPath = None):
@@ -65,28 +63,33 @@ class BotProcessor:
         try:
             return self.session.get( url, **kwargs)
         except Exception as ex:
-            self.logger.log_error( str(ex).replace( self.token, "____token____" ) )
+            msg = str(ex).replace( self.token, "*****" )
+            self.logger.log_error( msg )
+            print (msg)
 
     def __post(self, url, data=None, json=None, **kwargs):
         try:
             return self.session.post( url=url, data=data, json=json, **kwargs)
         except Exception as ex:
-            self.logger.log_error( str(ex).replace( self.token, "____token____" ) )
+            msg = str(ex).replace( self.token, "*****" )
+            self.logger.log_error( msg )
+            print (msg)
 
     def get_updates(self, timeout=0):
         params = {'timeout': timeout, 'offset': self.offset}
         resp = self.__get( self.api.getUpdates, params=params)
+        updates = []
 
         try:
             updates = resp.json()['result']
             if len(updates): self.offset = updates[-1]['update_id'] + 1
-            return updates
         except Exception as ex:
             self.logger.log_error(ex)
-            return []
+
+        return updates
 
     def get_me(self):
-        resp = self.__get( self.api.getMe)
+        resp = self.__get(self.api.getMe)
         if resp is None: return None
 
         if resp: #checking for error codes
