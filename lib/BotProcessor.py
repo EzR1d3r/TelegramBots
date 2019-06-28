@@ -30,7 +30,8 @@ class BotProcessor:
         self.token = self.load_token()
         self.api = TelegramBotAPI( telegram_api_url= "https://api.telegram.org", token = self.token )
 
-        self.process_status = self.get_me() is not False
+        # self.process_status = self.get_me() is not False
+        self.process_status = True
 
     def load_settings(self):
         if SM.get( "net", "use_proxy" ):
@@ -84,6 +85,7 @@ class BotProcessor:
             updates = resp.json()['result']
             if len(updates): self.offset = updates[-1]['update_id'] + 1
         except Exception as ex:
+            self.logger.log_error(resp)
             self.logger.log_error(ex)
 
         return updates
