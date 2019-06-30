@@ -4,20 +4,29 @@
 from bots.EchoBot import EchoBot
 from lib.BotProcessor import BotProcessor
 from flask import Flask, request
-# from flask_sslify import SSLify
-
-from OpenSSL import SSL
-context = SSL.Context(SSL.SSLv23_METHOD)
-context.use_privatekey_file('yourserver.key')
-context.use_certificate_file('yourserver.crt')
 
 app = Flask( __name__ )
-# sslify = SSLify(app)
-
 # app.debug = False
 resp = "<h1>Hello</h1>"
+context = ('domain.pem', 'domain.key')
 
-@app.route("/qwerty", methods=["POST", "GET"])
+# openssl req -newkey rsa:2048 -sha256 -nodes -keyout YOURPRIVATE.key -x509 -days 365 -out YOURPUBLIC.pem
+# curl --proxy 104.248.51.47:8080 -F "url=" -F "certificate=@domain.pem" https://api.telegram.org/bot***/setWebhook
+
+# <html>
+# <body>
+
+# <form action="https://api.telegram.org/bot<BOT_TOCKEN>/setwebhook" method="post" enctype="multipart/form-data">
+#     Select Certificate to upload:
+#     <input type="file" name="certificate" id="fileToUpload">
+# 	URL: <input type="text" name="url"  value="https://<YOURWEBSITE>/<YOUR_PHP_URL>"><br>
+#     <input type="submit" value="Upload Certificate" name="submit">
+# </form>
+
+# </body>
+# </html>
+
+@app.route("/", methods=["POST", "GET"])
 def index():
     if request.method == "POST":
         r = request.get_json()
