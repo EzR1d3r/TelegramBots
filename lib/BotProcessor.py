@@ -30,8 +30,7 @@ class BotProcessor:
         self.token = self.load_token()
         self.api = TelegramBotAPI( telegram_api_url= "https://api.telegram.org", token = self.token )
 
-        # self.process_status = self.get_me() is not False
-        self.process_status = True
+        self.process_status = self.get_me() is not False
 
     def load_settings(self):
         if SM.get( "net", "use_proxy" ):
@@ -48,7 +47,7 @@ class BotProcessor:
             else: self.logger.log_warning( "all https proxys is not available" )
             
             self.session.proxies = proxies
-
+ 
     def load_token(self, tokenPath = None):
         if tokenPath is None: tokenPath = TOKEN_DEF_PATH
 
@@ -62,7 +61,7 @@ class BotProcessor:
 
     def __get(self, url, **kwargs):
         try:
-            return self.session.get( url, **kwargs)
+            return self.session.get( url, **kwargs) #TODO pick SSLError (msg: perhaps need proxy)
         except Exception as ex:
             msg = str(ex).replace( self.token, "*****" )
             self.logger.log_error( msg )

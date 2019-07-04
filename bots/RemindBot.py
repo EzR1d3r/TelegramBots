@@ -1,17 +1,15 @@
-import json
-import requests
 import redis
 import time
 from threading import Timer
 
-from lib.UserDataManager import UserDataManager as UDM
-from lib.UserDataManager import DEF_USER_DATA
+# from lib.UserDataManager import UserDataManager as UDM
+# from lib.UserDataManager import DEF_USER_DATA
 
 
 s_genUID    = "getUID"
 s_timestamp = "timestamp"
 s_note      = "note"
-
+s_user      = "user"
 
 
 class RepeatTimer(Timer):
@@ -27,32 +25,41 @@ class RepeatTimer(Timer):
 
 class RedisDBManager():
     def __init__(self):
-        self.redisConn = redis.StrictRedis(host='localhost', port = 6379, db = 13)
+        self.redisConn = redis.StrictRedis(host='localhost', port = 6379, db = 13,
+                                            charset="utf-8", decode_responses=True)
 
     def saveTimeStamp(self, timestamp):
         uid = self.redisConn.incr( s_genUID, 1 )
         ts = f"{s_timestamp}:{timestamp}"
-        self.redisConn.set( ts, uid )
+        self.redisConn.sadd( ts, uid )
         return uid
 
-    def saveNote( self, uid, settings ):
-        k = f"{s_note}:{uid}"
-        self.redisConn.hmset( k, settings )
+    def saveNote( self, uid, note ):
+        hash_key = f"{s_note}:{uid}"
+        self.redisConn.hmset( hash_key, note )
 
-    def getNote(self, timestamp):
+    def saveUsrSetting(self, chat_id, setting, value):
+        hash_key = f"{s_user}:{chat_id}"
+        self.redisConn.hset( hash_key, setting, value )
+
+    def getNotes(self, timestamp):
         ts = f"{s_timestamp}:{timestamp}"
-        uid = self.redisConn.get( ts )
+        uids = self.redisConn.smembers( ts )
+        print(uids)
 
-        if uid is not None:
-            uid = uid.decode()
-            note = self.redisConn.hgetall( f"{s_note}:{uid}" )
-            return note
+        notes = []
+        if uids is not None:
+            for uid in uids:
+                notes.append( self.redisConn.hgetall( f"{s_note}:{uid}" ) )
+            
+        return notes
 
 class RemindBot:
     def __init__(self):
 
         self.commands = {
                             "/start"    : self.cmd_start,
+                            "/timezone" : self.cmd_timezone,
                         }
 
         self.current_update = None
@@ -62,16 +69,16 @@ class RemindBot:
         self.processor = None
 
     def sendRemind(self, note):
-        chat_id = note[b'chat_id'].decode()
+        chat_id = note['chat_id']
         msg = { "chat_id": chat_id, "text": "ALARM!!!" }
         self.processor.send_message( **msg )
 
     def checkNotes(self):
         timestamp = round( time.time() )
         print( "check", timestamp )
-        note = self.db.getNote( timestamp )
-        print(note)
-        if note is not None:
+        notes = self.db.getNotes( timestamp )
+        
+        for note in notes:
             self.sendRemind( note )
 
     def handle(self, update):
@@ -89,10 +96,10 @@ class RemindBot:
 
     def handle_text(self, text):
         resp = {}
-        timestamp, prepared_settings = self.parseMsg( text )
+        timestamp, note_body = self.parseMsg( text )
         
         if timestamp:
-            self.makeNote( timestamp, prepared_settings )
+            self.makeNote( timestamp, note_body )
 
         return resp
 
@@ -104,15 +111,15 @@ class RemindBot:
         except ValueError:
             timestamp = round( time.time() ) + 5
 
-        settings = { "chat_id": self.current_update['message']['chat']['id'], "recalls":1 }
-        prepared_settings = self.dictToStr( settings )
+        note_body = { "chat_id": self.current_update['message']['chat']['id'], "recalls":1 }
+        note_body = self.dictToStr( note_body )
 
-        return timestamp, prepared_settings
+        return timestamp, note_body
 
-    def makeNote(self, timestamp, settings):
-        print( "make", timestamp, settings )
+    def makeNote(self, timestamp, note_body):
+        print( "make", timestamp, note_body )
         uid = self.db.saveTimeStamp( timestamp )
-        self.db.saveNote( uid, settings )
+        self.db.saveNote( uid, note_body )
 
     def dictToStr(self, d):
         s_dict = {}
@@ -123,6 +130,10 @@ class RemindBot:
 
     def cmd_start(self, val):
         return {"text":"Greetings! I am ezRemindBot.\n"}
+
+    def cmd_timezone(self, val):
+        #https://en.wikipedia.org/wiki/List_of_time_zones_by_country
+        pass
 
     def unknown(self, cmd):
         return {"text":f"Unknown command {cmd}"}

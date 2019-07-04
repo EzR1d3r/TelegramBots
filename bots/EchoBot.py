@@ -1,8 +1,5 @@
-import json
-import requests
-
-from lib.UserDataManager import UserDataManager as UDM
-from lib.UserDataManager import DEF_USER_DATA
+# from lib.UserDataManager import UserDataManager as UDM
+# from lib.UserDataManager import DEF_USER_DATA
 
 class EchoBot:
     def __init__(self):
