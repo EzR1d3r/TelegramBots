@@ -1,9 +1,8 @@
 import sys
 import os
-import datetime
+import datetime as dt
 import __main__
 import pythonping as pp #https://pypi.org/project/pythonping/
-
 
 def projectDir():
     return sys.path[0]
@@ -15,14 +14,27 @@ TOKEN_DEF_PATH = os.path.join( projectDir(), TOKEN_DIR, f"{MAIN_FNAME}.token" )
 s_cmd_splitter = " "
 
 def date_std_format():
-    date = datetime.datetime.now()
+    date = dt.datetime.now()
     d = date.strftime('%d_%b_%Y')
     return d
 
 def datetime_std_format(time_sep=":"):
-    date = datetime.datetime.now()
-    dt = date.strftime(f'%d_%b_%Y_%H{time_sep}%M{time_sep}%S')
-    return dt
+    date = dt.datetime.now()
+    return date.strftime(f'%d_%b_%Y_%H{time_sep}%M{time_sep}%S')
+
+def time_std_format(t):
+    print(t)
+    return t.strftime( "%H:%M" )
+
+def utc_format(time_delta):
+    sec = round( time_delta.total_seconds() )
+    sign = "-" if sec < 0 else "+"
+
+    m = (abs(sec) // 60)
+    h, m = m // 60, m % 60
+
+    st = time_std_format( dt.time( hour = h, minute = m ) )
+    return f"UTC{sign}{st}"
 
 def min_ping_host( hosts, timeout = 0.5 ):
     # Attention! If proxy list or timeout is too large (or both),

@@ -3,7 +3,7 @@ import time
 import datetime as dt
 from threading import Timer
 
-from lib.Utils import s_cmd_splitter, dictToStr
+from lib.Utils import s_cmd_splitter, dictToStr, utc_format
 # from lib.UserDataManager import UserDataManager as UDM
 # from lib.UserDataManager import DEF_USER_DATA
 
@@ -13,6 +13,9 @@ s_timestamp  = "T"
 s_note       = "N"
 s_user       = "U"
 s_user_notes = "UN"
+
+max_td = dt.timedelta( hours = 14 )
+min_td = dt.timedelta( hours = -12 )
 
 
 class RepeatTimer(Timer):
@@ -144,10 +147,14 @@ class RemindBot:
 
         if l == 2:
             h, m = [ int(i) for i in val ]
+            m = - abs(m) if h < 0 else m
+            
             utc = dt.timedelta( hours = h, minutes = m )
         elif l == 1:
-            h = val[0]
+            h = int(val[0])
             utc = dt.timedelta( hours = h )
+
+        if not (min_td <= utc <= max_td): raise RuntimeError ( "Wrong UTC timezone." )
 
         return utc
 
@@ -165,12 +172,13 @@ class RemindBot:
 
             self.current_cmd = "/timezone"
         else:
-
-            # try:
-            #     h, m = [ int( i ) for i in val.split(":") ]
-            #     text = f"Timezone set as: UTC{h}:{m}"
-            # except ValueError:
-            #     text = "Wrong timezone format: {val}"
+            try:
+                utc = self.parseUTC( val )
+                text = f"Timezone set as: { utc_format( utc ) }"
+            except ValueError:
+                text = f"Wrong timezone format: {val}"
+            except RuntimeError as e:
+                text = str(e)
 
             self.current_cmd = ""
         
