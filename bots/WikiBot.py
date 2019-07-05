@@ -3,6 +3,7 @@ import requests
 
 from lib.UserDataManager import UserDataManager as UDM
 from lib.UserDataManager import DEF_USER_DATA
+from lib.Utils import s_cmd_splitter
 
 class WikiBot:
     def __init__(self):
@@ -26,7 +27,7 @@ class WikiBot:
         return self.handele_cmd(text) if text.startswith('/') else self.handle_text(text)
 
     def handele_cmd(self, cmd):
-        cmd = cmd.split(":")
+        cmd = cmd.split( s_cmd_splitter )
         cmd_func = self.commands.get( cmd[0] )
         val = cmd[1] if len(cmd) > 1 else ""
 
@@ -44,9 +45,9 @@ class WikiBot:
 
     def cmd_language(self, val):
         if val == "":
-            btn_list = [ [ {"text": "/language:" + lang} for lang in self.support_langs ] ]
+            btn_list = [ [ {"text": f"/language:{s_cmd_splitter}" + lang} for lang in self.support_langs ] ]
             keyboard = {"keyboard": btn_list, "resize_keyboard": True }
-            text = "Choose the language zone.\nYou may set manually by /language:my_lang"
+            text = f"Choose the language zone.\nYou may set manually by /language{s_cmd_splitter}my_lang"
             
             return { "text":text, "reply_markup": json.dumps( keyboard ) }
         else:
