@@ -1,9 +1,8 @@
 import redis
 import time
 import datetime as dt
-from threading import Timer
 
-from lib.Utils import s_cmd_splitter, dictToStr, utc_format
+from lib.Utils import RepeatTimer, s_cmd_splitter, dictToStr, utc_format
 # from lib.UserDataManager import UserDataManager as UDM
 # from lib.UserDataManager import DEF_USER_DATA
 
@@ -17,17 +16,70 @@ s_user_notes = "UN"
 max_td = dt.timedelta( hours = 14 )
 min_td = dt.timedelta( hours = -12 )
 
+in_keywords = [ "in", "через" ]
 
-class RepeatTimer(Timer):
-    def run(self):
-        while not self.finished.wait( self.interval ):
-            if not self.finished.is_set():
-                self.function(*self.args, **self.kwargs)
-        
-    def cancel( self ):
-        super().cancel()
-        self.function = None # для корректного завершения, чтобы не сохранились циклические ссылки на self владельца таймера
+mult = { 
+            3600 : ["hou", "час"],
+            60   : ["min", "мин"],
+            1    : ["sec", "сек"],
+        }
 
+mult_dict = {}
+
+for k, v in mult.items():
+    for unit in v:
+        mult_dict[unit] = k
+
+class Note():
+    s_ts      = "t"
+    s_chat_id = "c"
+    s_msg     = "m"
+    s_rec     = "r"
+    s_rec_i   = "ri"
+
+    init_dict = {
+                    s_ts      : "timestamp",
+                    s_chat_id : "chat_id",
+                    s_msg     : "message",
+                    s_rec     : "recalls",
+                    s_rec_i   : "rec_interval",
+                }
+
+    def __init__(self, timestamp = -1, chat_id = 0, message = "",
+                        recalls = 0, rec_interval = 300):
+        self.timestamp = timestamp
+        self.chat_id = chat_id
+        self.message = message
+        self.recalls = recalls
+        self.rec_interval = rec_interval
+
+    def datetime(self, local_utc_sec = 0):
+        return dt.datetime.fromtimestamp(self.timestamp) + dt.timedelta(seconds = local_utc_sec)
+
+    def local(self, local_utc_sec):
+        return self.timestamp + local_utc_sec
+
+    def sdict(self):
+        d = {
+                self.s_ts     : self.timestamp,
+                self.s_chat_id: self.chat_id,
+                self.s_msg    : self.message,
+                self.s_rec    : self.recalls,
+                self.s_rec_i  : self.rec_interval,
+            }
+
+        return d
+
+    @classmethod
+    def from_dict(cls, _dict):
+        kwargs = {}
+        for k, v in _dict.items():
+            kwargs[ cls.init_dict[k] ] = v
+
+        return Note(**kwargs )
+
+    def __bool__(self):
+        return self.timestamp != -1
 
 class RedisDBManager():
     def __init__(self):
@@ -36,34 +88,39 @@ class RedisDBManager():
 
     def saveTimeStamp(self, timestamp, uid):
         ts = f"{s_timestamp}:{timestamp}"
+        print( "SET", ts )
         self.redisConn.sadd( ts, uid )
 
     def saveNote( self, note ):
         uid = self.redisConn.incr( s_genUID, 1 )
         note_key = f"{s_note}:{uid}"
-        self.redisConn.hmset( note_key, note )
-
-        chat_id = note["chat_id"]
-        usr_notes_key = f"{s_user_notes}:{chat_id}"
+        usr_notes_key = f"{s_user_notes}:{note.chat_id}"
+        
+        self.redisConn.hmset( note_key, note.sdict() )
         self.redisConn.sadd( usr_notes_key, uid )
 
         return uid
 
     def saveUsrSetting(self, chat_id, setting, value):
-        hash_key = f"{s_user}:{chat_id}"
-        self.redisConn.hset( hash_key, setting, value )
+        hash_name = f"{s_user}:{chat_id}"
+        self.redisConn.hset( hash_name, setting, value )
+
+    def getUsrSetting( self, chat_id, setting ):
+        hash_name = f"{s_user}:{chat_id}"
+        return self.redisConn.hget( hash_name, setting )
 
     def getNotes(self, timestamp):
         ts = f"{s_timestamp}:{timestamp}"
         uids = self.redisConn.smembers( ts )
-        print(uids)
+        print( "GET", ts, uids )
 
         notes = []
         if uids is not None:
             for uid in uids:
-                notes.append( self.redisConn.hgetall( f"{s_note}:{uid}" ) )
+                notes.append( self.redisConn.hgetall( f"{s_note}:{uid}" ) ) # TODO pipeline
             
-        return notes
+        return [ Note.from_dict(note_d) for note_d in notes]
+
 
 class RemindBot:
     def __init__(self):
@@ -84,19 +141,6 @@ class RemindBot:
         self.timer.start()
         self.processor = None
 
-    def sendRemind(self, note):
-        chat_id = note['chat_id']
-        msg = { "chat_id": chat_id, "text": "ALARM!!!" }
-        self.processor.send_message( **msg )
-
-    def checkNotes(self):
-        timestamp = round( time.time() )
-        print( "check", timestamp )
-        notes = self.db.getNotes( timestamp )
-        
-        for note in notes:
-            self.sendRemind( note )
-
     def handle(self, update):
         self.current_update = update
         text = update['message']['text']
@@ -113,32 +157,72 @@ class RemindBot:
         return result
 
     def handle_text(self, text):
-        resp = {}
-        timestamp, note_body = self.parseMsg( text )
-        
-        if timestamp:
-            self.makeNote( timestamp, note_body )
+        note = self.parseMsg( text )        
+        if note:
+            self.pushNote( note )
+            msg = f"Note set to { note.datetime().strftime(f'%d.%b.%Y  %H:%M:%S') }"
+        else:
+            msg = "Something goes wrong"
 
-        return resp
+        return {"text":msg}
+
+    def sendRemind(self, note):
+        chat_id = note.chat_id
+        msg = { "chat_id": chat_id, "text": note.message }
+        self.processor.send_message( **msg )
+
+    def checkNotes(self):
+        date = dt.datetime.utcnow()
+        timestamp = round( dt.datetime.utcnow().timestamp() )
+        notes = self.db.getNotes( timestamp )
+        
+        for note in notes:
+            self.sendRemind( note )
+
+    ## utils funcs
 
     def parseMsg(self, text):
-        timestamp = 0
+        text_list = text.lower().split( " " )
 
         try:
-            timestamp = int(text)
-        except ValueError:
-            timestamp = round( time.time() ) + 5
+            if (text_list[0] in in_keywords):
+                note = self.parse_InMsgType( text_list )
+            else:
+                note = self.parse_DateMsgType(text_list)
+        except:
+            note = Note()
 
-        note_body = { "chat_id": self.current_update['message']['chat']['id'], "recalls":1 }
-        note_body = dictToStr( note_body )
+        return note
 
-        return timestamp, note_body
+    def parse_InMsgType(self, text_list):
+        t = text_list[1:]
+        msg = ""
+        time, idx = 0, 0
 
-    def makeNote(self, timestamp, note_body):
-        print( "make", timestamp, note_body )
+        while idx < len(t):
+            if t[idx].isdigit():
+                time += float( t[idx] ) * mult_dict[ t[idx+1][:3] ]
+                idx+=2
+            else:
+                msg = t[idx]
+                idx+=1
 
-        uid = self.db.saveNote( note_body )
-        self.db.saveTimeStamp( timestamp, uid )
+        if time <= 0: raise ValueError
+        
+        delta = dt.timedelta( seconds = time )
+        note_dt_utc = dt.datetime.utcnow() + delta
+
+        chat_id =self.current_update['message']['chat']['id']
+        timestamp = round( note_dt_utc.timestamp() )
+
+        return Note( timestamp = timestamp, chat_id = chat_id, message = msg )
+
+    def parse_DateMsgType(self, text_list):
+        return Note()
+
+    def pushNote(self, note):
+        uid = self.db.saveNote( note )
+        self.db.saveTimeStamp( note.timestamp, uid )
 
     def parseUTC(self, val):
         val = val.split(":")
@@ -158,6 +242,16 @@ class RemindBot:
 
         return utc
 
+    def local_UsrDateTime(self, chat_id):
+        date = dt.datetime.utcnow()
+        utc = self.db.getUsrSetting( chat_id, "utc" )
+
+        delta = dt.timedelta( seconds = int(utc) )
+
+        return date + delta
+
+    ## commands
+
     def cmd_start(self, val):
         return {"text":"Greetings! I am ezRemindBot.\n"}
 
@@ -175,6 +269,9 @@ class RemindBot:
             try:
                 utc = self.parseUTC( val )
                 text = f"Timezone set as: { utc_format( utc ) }"
+                chat_id = self.current_update['message']['chat']['id']
+                utc_sec = round(utc.total_seconds())
+                self.db.saveUsrSetting( chat_id, "UTC", utc_sec )
             except ValueError:
                 text = f"Wrong timezone format: {val}"
             except RuntimeError as e:
@@ -186,3 +283,20 @@ class RemindBot:
 
     def unknown(self, cmd):
         return {"text":f"Unknown command {cmd}"}
+
+
+# class UTC(dt.tzinfo):
+#     def __init__(self, utc, name="", dst=0):
+#         self.__utc = utc
+#         self.__name = name
+#         self.__dst = dst
+
+#     def tzname(self, dt):
+#         return self.__name
+
+#     def utcoffset(self, dt):
+#         "datetime -> timedelta, positive for east of UTC, negative for west of UTC"
+#         return dt.timedelta( seconds = self.__utc )
+
+#     def dst(self, dt):
+#         return dt.timedelta( seconds = self.__dst)

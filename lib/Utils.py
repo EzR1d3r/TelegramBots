@@ -1,7 +1,8 @@
 import sys
 import os
-import datetime as dt
 import __main__
+import datetime as dt
+from threading import Timer
 import pythonping as pp #https://pypi.org/project/pythonping/
 
 def projectDir():
@@ -58,3 +59,13 @@ def dictToStr(d):
         s_dict[ str(k) ] = str(v)
     
     return s_dict
+
+class RepeatTimer(Timer):
+    def run(self):
+        while not self.finished.wait( self.interval ):
+            if not self.finished.is_set():
+                self.function(*self.args, **self.kwargs)
+        
+    def cancel( self ):
+        super().cancel()
+        self.function = None # для корректного завершения, чтобы не сохранились циклические ссылки на self владельца таймера
