@@ -24,7 +24,10 @@ class WikiBot:
     def handle(self, update):
         self.current_update = update
         text = update['message']['text']
-        return self.handele_cmd(text) if text.startswith('/') else self.handle_text(text)
+
+        resp = self.handele_cmd(text) if text.startswith('/') else self.handle_text(text)
+        self.current_update = None
+        return resp
 
     def handele_cmd(self, cmd):
         cmd = cmd.split( s_cmd_splitter )
