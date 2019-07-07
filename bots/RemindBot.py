@@ -21,9 +21,12 @@ min_td = dt.timedelta( hours = -12 )
 format_data = "%d.%m.%Y %H:%M" # "07.07.2019 00:33"
 format_time = "%H:%M"          # "00:33"
 
-in_keywords = [ "in", "через" ]
+in_keywords  = [ "in", "через" ]
+day_keywords = [ "today", "tomorrow", "сегодня", "завтра" ]
 
-mult = { 
+mult = {
+            0    : ["tod", "сег"], #today
+            86400: ["tom", "зав"], #tomorrow
             3600 : ["hou", "час"],
             60   : ["min", "мин"],
             1    : ["sec", "сек"],
@@ -78,7 +81,7 @@ class Note():
     @classmethod
     def from_dict(cls, _dict):
         kwargs = {}
-        for k, v in _dict.items():
+        for k, v in _dict.items(): #заменяем сокращенные ключи полными именами полей
             v = int(v) if v.isdigit() else v
             kwargs[ cls.init_dict[k] ] = v
 
@@ -104,7 +107,6 @@ class RedisDBManager():
         
         self.redisConn.hmset( note_key, note.sdict() )
         self.redisConn.sadd( usr_notes_key, uid )
-
         return uid
 
     def saveUsrSetting(self, chat_id, setting, value):
@@ -136,8 +138,12 @@ class RemindBot:
         #timezone - Set your timezone
 
         self.commands = {
-                            "/start"    : self.cmd_start,
-                            "/timezone" : self.cmd_timezone,
+                            "/start"       : self.cmd_start,
+                            "/timezone"    : self.cmd_timezone,
+                            # "/help"        : self.help,
+                            # "/my_notes"    : self.cmd_my_notes,
+                            # "/remove"      : self.cmd_remove,
+                            # "/my_settings" : self.my_settings,
                         }
 
         self.current_update = None
@@ -165,19 +171,19 @@ class RemindBot:
         return result
 
     def handle_text(self, text):
-        note = self.parseMsg( text )        
+        note = self.parseMsg( text )
         if note:
             self.pushNote( note )
             date = note.datetime( local_utc_sec = self.getUsrUTC() )
-            msg = f"Note set to { date.strftime(f'%d.%b.%Y  %H:%M:%S') }"
+            responce_msg = f"Note '{note.message}' set to { date.strftime(f'%d.%m.%Y  %H:%M:%S') }"
         else:
-            msg = "Something goes wrong"
+            responce_msg = "Something goes wrong.\nMake sure that you set your timezone."
 
-        return {"text":msg}
+        return {"text":responce_msg}
 
     def sendRemind(self, note):
         chat_id = note.chat_id
-        msg = { "chat_id": chat_id, "text": note.message }
+        msg = { "chat_id": chat_id, "text": f"Remind: {note.message}" }
         self.processor.send_message( **msg )
 
     def checkNotes(self):
@@ -190,28 +196,30 @@ class RemindBot:
     ## utils funcs
 
     def parseMsg(self, text):
-        text_list = text.lower().split( " " )
+        text_list_lower = text.lower().split( " " )
+        text_list_orig = text.split( " " )
         try:
-            if (text_list[0] in in_keywords):
-                note = self.parse_InMsgType( text_list, text )
+            if (text_list_lower[0] in in_keywords):
+                note = self.parse_InMsgType( text_list_lower, text_list_orig )
+            elif (text_list_lower[0] in day_keywords):
+                note = self.parse_DayMsgType( text_list_lower, text_list_orig )
             else:
-                note = self.parse_DateMsgType(text_list, text)
+                note = self.parse_DateMsgType(text_list_lower, text_list_orig)
         except:
             note = Note()
 
         return note
 
-    def parse_InMsgType(self, text_list, original_text):
-        t = text_list[1:]
+    def parse_InMsgType(self, text_list, text_list_orig):
         msg = ""
-        time, idx = 0, 0
+        time, idx = 0, 1
 
-        while idx < len(t):
-            if t[idx].isdigit():
-                time += float( t[idx] ) * mult_dict[ t[idx+1][:3] ]
+        while idx < len(text_list):
+            if text_list[idx].isdigit():
+                time += float( text_list[idx] ) * mult_dict[ text_list[idx+1][:3] ]
                 idx+=2
             else:
-                msg = t[idx]
+                msg = text_list_orig[idx]
                 idx+=1
 
         if time <= 0: raise ValueError
@@ -224,17 +232,31 @@ class RemindBot:
 
         return Note( timestamp = timestamp, chat_id = chat_id, message = msg )
 
-    def parse_DateMsgType(self, text_list, original_text):
+    def parse_DateMsgType(self, text_list, text_list_orig):
         date_s = " ".join( text_list[:2]  )
-        msg    = " ".join( text_list[2:] )
+        msg    = " ".join( text_list_orig[2:] )
 
         date = dt.datetime.strptime( date_s, format_data )
-        note_dt_utc = date - dt.timedelta( seconds = self.getUsrUTC())
+        note_dt_utc = date - dt.timedelta( seconds = self.getUsrUTC() )
 
         chat_id = self.current_update['message']['chat']['id']
         timestamp = round( note_dt_utc.timestamp() )
 
         return Note( timestamp = timestamp, chat_id = chat_id, message = msg )
+
+    def parse_DayMsgType(self, text_list, text_list_orig):
+        date = dt.datetime.utcnow()
+        delta_sec = mult_dict[ text_list[0][:3] ]
+        time = dt.datetime.strptime( text_list[1], format_time )
+        date = date.replace( hour = time.hour, minute = time.minute, second = 0 )
+        date += dt.timedelta( seconds = delta_sec )
+
+        note_dt_utc = date - dt.timedelta( seconds = self.getUsrUTC() )
+
+        chat_id = self.current_update['message']['chat']['id']
+        timestamp = round( note_dt_utc.timestamp() )
+
+        return Note( timestamp = timestamp, chat_id = chat_id, message = " ".join( text_list_orig[3:] ) )
 
     def getUsrUTC(self, chat_id = None):
         if chat_id is None:
@@ -269,9 +291,12 @@ class RemindBot:
     ## commands
 
     def cmd_start(self, val):
-        return {"text":"Greetings! I am ezRemindBot.\n"}
+        chat_id = self.current_update['message']['chat']['id']
+        msg = { "chat_id": chat_id, "text":"Greetings! I am ezRemindBot." }
+        self.processor.send_message( **msg )
+        return self.cmd_timezone()
 
-    def cmd_timezone(self, val):
+    def cmd_timezone(self, val=""):
         if val == "":
             text = "Please, tell me your timezene." \
                     "Format is:\n" \
