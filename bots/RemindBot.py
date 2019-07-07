@@ -220,7 +220,7 @@ class RemindBot:
                 time += float( text_list[idx] ) * mult_dict[ text_list[idx+1][:3] ]
                 idx+=2
             else:
-                msg = text_list_orig[idx]
+                msg += f"{text_list_orig[idx]} "
                 idx+=1
 
         if time <= 0: raise ValueError
@@ -256,8 +256,9 @@ class RemindBot:
 
         chat_id = self.current_update['message']['chat']['id']
         timestamp = round( note_dt_utc.timestamp() )
+        msg = " ".join( text_list_orig[2:] )
 
-        return Note( timestamp = timestamp, chat_id = chat_id, message = " ".join( text_list_orig[3:] ) )
+        return Note( timestamp = timestamp, chat_id = chat_id, message = msg )
 
     def getUsrUTC(self, chat_id = None):
         if chat_id is None:
