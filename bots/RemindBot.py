@@ -134,16 +134,17 @@ class RemindBot:
     def __init__(self):
 
         #list of commands (have to be sent to FatherBot, look /setcommands)
-        #start - Description
+        #start - Greetings
+        #help - Description of available methods to make a note
         #timezone - Set your timezone
 
         self.commands = {
                             "/start"       : self.cmd_start,
                             "/timezone"    : self.cmd_timezone,
-                            # "/help"        : self.help,
+                            "/help"        : self.cmd_help,
                             # "/my_notes"    : self.cmd_my_notes,
                             # "/remove"      : self.cmd_remove,
-                            # "/my_settings" : self.my_settings,
+                            # "/my_settings" : self.cmd_my_settings,
                         }
 
         self.current_update = None
@@ -295,6 +296,16 @@ class RemindBot:
         msg = { "chat_id": chat_id, "text":"Greetings! I am ezRemindBot." }
         self.processor.send_message( **msg )
         return self.cmd_timezone()
+
+    def cmd_help(self, val=""):
+        msg =   "You can set the note by next methods:\n"\
+                "In 15 minutes[hours, seconds] Call mom\n"\
+                "In 1 hour 15 min Wake up!\n"\
+                "Today[Tomorrow] 15:30 Send e-mail\n"\
+                "7.7.2019 11:00 Feed fishes\n\n"\
+                "Please configure your timezone (/timezone)\n"
+
+        return {"text":msg}
 
     def cmd_timezone(self, val=""):
         if val == "":
