@@ -48,14 +48,14 @@ class WikiBot:
 
     def cmd_language(self, val):
         if val == "":
-            btn_list = [ [ {"text": f"/language:{s_cmd_splitter}" + lang} for lang in self.support_langs ] ]
+            btn_list = [ [ {"text": f"/language{s_cmd_splitter}" + lang} for lang in self.support_langs ] ]
             keyboard = {"keyboard": btn_list, "resize_keyboard": True }
             text = f"Choose the language zone.\nYou may set manually by /language{s_cmd_splitter}my_lang"
             
             return { "text":text, "reply_markup": json.dumps( keyboard ) }
         else:
             chat_id  = self.current_update['message']['chat']['id']
-            UDM.update(chat_id, {"language":val})
+            UDM.update(chat_id, "language", value = val)
             reply_markup = json.dumps({ "remove_keyboard": True })
 
             return { "text":f"Choosed language: {val}", "reply_markup": reply_markup}

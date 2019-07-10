@@ -49,8 +49,15 @@ class JSONFileHandler:
         with open( path, "w") as f:
             json.dump(self.__dict_obj, f, indent=4)
 
-    def update(self, key, value):
-        self.__dict_obj[ str(key) ] = json.loads( json.dumps(value) )
+    def update(self, *keys, value):
+        keys = [ str(key) for key in keys ]
+        obj = self.__dict_obj
+        
+        for key in keys[:-1]:
+            obj[key] = {}
+            obj = obj[key]
+
+        obj[ keys[-1] ] = value
         self.__save()
 
     def get(self, *keys, alt_val_expr = lambda:None):
@@ -68,18 +75,16 @@ class JSONFileHandler:
                 return None
 
 
-# class ValueGetWrapper:
-#     def __init__(self, value):
-#         self.value = value
+class JSONWrapper:
 
-#     def __getitem__(self, key):
-#         raise KeyError("Invalid use of NoneWrapper, you have to use get() method")
+    def __init__(self, value):
+        self.__value = value
 
-#     def val(self):
-#         return self.value
-    
-#     def get(self, key):
-#         try:
-#             return ValueGetWrapper( self.value[key] )
-#         except (KeyError, TypeError):
-#             return ValueGetWrapper(None)
+    def __getattr__(self, name):
+        try:
+            return JSONWrapper( self.__value[name] )
+        except (KeyError, TypeError):
+            return None
+
+    def __call__(self):
+        return self.__value
