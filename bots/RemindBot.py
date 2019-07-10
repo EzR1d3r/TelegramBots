@@ -99,6 +99,7 @@ class RedisDBManager():
         ts = f"{s_timestamp}:{timestamp}"
         # print( "SET", ts, threading.current_thread().getName() )
         self.redisConn.sadd( ts, uid )
+        self.redisConn.expire( ts, self.gen_ttl( timestamp ) )
 
     def saveNote( self, note ):
         uid = self.redisConn.incr( s_genUID, 1 )
@@ -106,7 +107,9 @@ class RedisDBManager():
         usr_notes_key = f"{s_user_notes}:{note.chat_id}"
         
         self.redisConn.hmset( note_key, note.sdict() )
-        self.redisConn.sadd( usr_notes_key, uid )
+        self.redisConn.expire( note_key, self.gen_ttl(note.timestamp) )
+
+        self.redisConn.sadd( usr_notes_key, uid ) # TODO remove uid from set after ttl
         return uid
 
     def saveUsrSetting(self, chat_id, setting, value):
@@ -128,6 +131,9 @@ class RedisDBManager():
                 notes.append( self.redisConn.hgetall( f"{s_note}:{uid}" ) ) # TODO pipeline
             
         return [ Note.from_dict(note_d) for note_d in notes]
+
+    def gen_ttl(self, utc_timestamp):
+        return round (utc_timestamp - dt.datetime.utcnow().timestamp() + 20)
 
 
 class RemindBot:
