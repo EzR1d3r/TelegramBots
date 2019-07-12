@@ -5,9 +5,9 @@ import datetime as dt
 import threading
 
 from lib.Utils import RepeatTimer, s_cmd_splitter, dictToStr, utc_format
-# from lib.UserDataManager import UserDataManager as UDM
-# from lib.UserDataManager import DEF_USER_DATA
 
+###################################################################
+###################################################################
 
 s_genUID     = "getUID"
 s_timestamp  = "T"
@@ -38,6 +38,10 @@ for k, v in mult.items():
     for unit in v:
         mult_dict[unit] = k
 
+###################################################################
+###################################################################
+
+
 class Note():
     s_ts      = "t"
     s_chat_id = "c"
@@ -58,8 +62,8 @@ class Note():
         self.timestamp = timestamp
         self.chat_id = chat_id
         self.message = message
-        self.recalls = recalls
-        self.rec_interval = rec_interval
+        self.recalls = recalls #пока не используется
+        self.rec_interval = rec_interval #пока не используется
 
     def datetime(self, local_utc_sec = 0):
         return dt.datetime.fromtimestamp(self.timestamp) + dt.timedelta(seconds = local_utc_sec)
@@ -89,6 +93,8 @@ class Note():
 
     def __bool__(self):
         return self.timestamp != -1
+
+
 
 class RedisDBManager():
     def __init__(self):
@@ -134,6 +140,7 @@ class RedisDBManager():
 
     def gen_ttl(self, utc_timestamp):
         return round (utc_timestamp - dt.datetime.utcnow().timestamp() + 20)
+
 
 
 class RemindBot:
@@ -253,12 +260,16 @@ class RemindBot:
 
     def parse_DayMsgType(self, text_list, text_list_orig):
         date = dt.datetime.utcnow()
-        delta_sec = mult_dict[ text_list[0][:3] ]
+        utc_offset = dt.timedelta( seconds = self.getUsrUTC() )
+        date += utc_offset
+
+        day_key = text_list[0][:3]
+        delta_sec = mult_dict[ day_key ]
         time = dt.datetime.strptime( text_list[1], format_time )
         date = date.replace( hour = time.hour, minute = time.minute, second = 0 )
         date += dt.timedelta( seconds = delta_sec )
 
-        note_dt_utc = date - dt.timedelta( seconds = self.getUsrUTC() )
+        note_dt_utc = date - utc_offset
 
         chat_id = self.current_update['message']['chat']['id']
         timestamp = round( note_dt_utc.timestamp() )
@@ -344,14 +355,6 @@ class RemindBot:
         return {"text":f"Unknown command {cmd}"}
 
 
-
-# def local_UsrDateTime(self, chat_id):
-#     date = dt.datetime.utcnow()
-#     utc = self.db.getUsrSetting( chat_id, "utc" )
-
-#     delta = dt.timedelta( seconds = int(utc) )
-
-#     return date + delta
 
 # class UTC(dt.tzinfo):
 #     def __init__(self, utc, name="", dst=0):
