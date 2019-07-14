@@ -38,6 +38,7 @@ for k, v in mult.items():
     for unit in v:
         mult_dict[unit] = k
 
+
 ###################################################################
 ###################################################################
 
@@ -91,6 +92,14 @@ class Note():
 
         return Note(**kwargs )
 
+    @classmethod
+    def from_list(cls, _list):
+        d = {}
+        for i in range( 0, len(_list), 2 ):
+            d[ _list[i] ] = _list[i+1]
+
+        return cls.from_dict( d )
+
     def __bool__(self):
         return self.timestamp != -1
 
@@ -105,7 +114,7 @@ class RedisDBManager():
         ts = f"{s_timestamp}:{timestamp}"
         # print( "SET", ts, threading.current_thread().getName() )
         self.redisConn.sadd( ts, uid )
-        self.redisConn.expire( ts, self.gen_ttl( timestamp ) )
+        # self.redisConn.expire( ts, self.gen_ttl( timestamp ) )
 
     def saveNote( self, note ):
         uid = self.redisConn.incr( s_genUID, 1 )
@@ -113,7 +122,7 @@ class RedisDBManager():
         usr_notes_key = f"{s_user_notes}:{note.chat_id}"
         
         self.redisConn.hmset( note_key, note.sdict() )
-        self.redisConn.expire( note_key, self.gen_ttl(note.timestamp) )
+        # self.redisConn.expire( note_key, self.gen_ttl(note.timestamp) )
 
         self.redisConn.sadd( usr_notes_key, uid ) # TODO remove uid from set after ttl
         return uid
@@ -126,17 +135,36 @@ class RedisDBManager():
         hash_name = f"{s_user}:{chat_id}"
         return self.redisConn.hget( hash_name, setting )
 
-    def getNotes(self, timestamp):
-        ts = f"{s_timestamp}:{timestamp}"
-        uids = self.redisConn.smembers( ts )
-        # print( "GET", ts, uids, threading.current_thread().getName() )
+    # def getNotes(self, timestamp):
+    #     ts_key = f"{s_timestamp}:{timestamp}"
+    #     uids = self.redisConn.smembers( ts_key )
+    #     # print( "GET", ts, uids, threading.current_thread().getName() )
 
-        notes = []
-        if uids is not None:
-            for uid in uids:
-                notes.append( self.redisConn.hgetall( f"{s_note}:{uid}" ) ) # TODO pipeline
+    #     notes = []
+    #     if uids is not None:
+    #         for uid in uids:
+    #             notes.append( self.redisConn.hgetall( f"{s_note}:{uid}" ) ) # TODO pipeline
             
-        return [ Note.from_dict(note_d) for note_d in notes]
+    #     return [ Note.from_dict(note_d) for note_d in notes]
+
+    def getNotes(self, timestamp):
+
+        # EVAL script 0 s_timestamp timestamp s_note
+        lua_script_get_notes = "\
+        local ts_key = ARGV[1]..':'..ARGV[2]\
+        local uids = redis.call('smembers', ts_key)\
+        local notes = {}\
+        for i = 1, #uids do\
+            local note_key = ARGV[3]..':'..uids[i]\
+            print(note_key)\
+            notes[i] = redis.call( 'hgetall', note_key )\
+        end\
+        return notes"
+
+        notes = self.redisConn.eval( lua_script_get_notes, 0,
+                                     s_timestamp, timestamp, s_note )
+
+        return [ Note.from_list(note_l) for note_l in notes ]
 
     def gen_ttl(self, utc_timestamp):
         return round (utc_timestamp - dt.datetime.utcnow().timestamp() + 20)
@@ -202,10 +230,14 @@ class RemindBot:
 
     def checkNotes(self):
         timestamp = round( dt.datetime.utcnow().timestamp() )
+        start = time.time()
         notes = self.db.getNotes( timestamp )
+        print ( (time.time() - start) * 1000 )
         
-        for note in notes:
-            self.sendRemind( note )
+        print( notes )
+
+        # for note in notes:
+            # self.sendRemind( note )
 
     ## utils funcs
 
@@ -285,8 +317,9 @@ class RemindBot:
         return utc_delta_sec
 
     def pushNote(self, note):
-        uid = self.db.saveNote( note )
-        self.db.saveTimeStamp( note.timestamp, uid )
+        for i in range(1000):
+            uid = self.db.saveNote( note )
+            self.db.saveTimeStamp( note.timestamp, uid )
 
     def parseUTC(self, val):
         val = val.split(":")

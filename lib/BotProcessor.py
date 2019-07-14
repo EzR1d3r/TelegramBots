@@ -35,7 +35,7 @@ class BotProcessor:
     def load_settings(self):
         if SM.get( "net", "use_proxy" ):
             proxies = {}
-            http_proxys = SM.get( "net", "proxy_list", "http" )
+            http_proxys = SM.get( "net", "proxy_list", "http" ) # TODO: try swich proxy if it broken in runtime
             https_proxys = SM.get( "net", "proxy_list", "https" )
 
             http, https = min_ping_host( http_proxys ), min_ping_host( https_proxys )
