@@ -38,6 +38,18 @@ for k, v in mult.items():
     for unit in v:
         mult_dict[unit] = k
 
+# EVAL script 0 s_timestamp timestamp s_note
+lua_script_get_notes = "\
+local ts_key = ARGV[1]..':'..ARGV[2]\n\
+local uids = redis.call('smembers', ts_key)\n\
+local notes = {}\n\
+for i = 1, #uids do\n\
+    local note_key = ARGV[3]..':'..uids[i]\n\
+    print(note_key)\n\
+    notes[i] = redis.call( 'hgetall', note_key )\n\
+    end\n\
+return notes"
+
 
 ###################################################################
 ###################################################################
@@ -104,11 +116,12 @@ class Note():
         return self.timestamp != -1
 
 
-
 class RedisDBManager():
     def __init__(self):
         self.redisConn = redis.StrictRedis(host='localhost', port = 6379, db = 13,
                                             charset="utf-8", decode_responses=True)
+
+        self.lua_script_get_notes = self.redisConn.script_load( lua_script_get_notes )
 
     def saveTimeStamp(self, timestamp, uid):
         ts = f"{s_timestamp}:{timestamp}"
@@ -147,21 +160,21 @@ class RedisDBManager():
             
     #     return [ Note.from_dict(note_d) for note_d in notes]
 
+    # def getNotes(self, timestamp):
+    #     ts_key = f"{s_timestamp}:{timestamp}"
+    #     uids = self.redisConn.smembers( ts_key )
+    #     # print( "GET", ts, uids, threading.current_thread().getName() )
+
+    #     pipe = self.redisConn.pipeline()
+    #     if uids is not None:
+    #         for uid in uids:
+    #             pipe.hgetall( f"{s_note}:{uid}" )
+    #     notes = pipe.execute()
+
+    #     return [ Note.from_dict(note_d) for note_d in notes]
+
     def getNotes(self, timestamp):
-
-        # EVAL script 0 s_timestamp timestamp s_note
-        lua_script_get_notes = "\
-        local ts_key = ARGV[1]..':'..ARGV[2]\
-        local uids = redis.call('smembers', ts_key)\
-        local notes = {}\
-        for i = 1, #uids do\
-            local note_key = ARGV[3]..':'..uids[i]\
-            print(note_key)\
-            notes[i] = redis.call( 'hgetall', note_key )\
-        end\
-        return notes"
-
-        notes = self.redisConn.eval( lua_script_get_notes, 0,
+        notes = self.redisConn.evalsha( self.lua_script_get_notes, 0,
                                      s_timestamp, timestamp, s_note )
 
         return [ Note.from_list(note_l) for note_l in notes ]
@@ -230,14 +243,10 @@ class RemindBot:
 
     def checkNotes(self):
         timestamp = round( dt.datetime.utcnow().timestamp() )
-        start = time.time()
         notes = self.db.getNotes( timestamp )
-        print ( (time.time() - start) * 1000 )
-        
-        print( notes )
 
-        # for note in notes:
-            # self.sendRemind( note )
+        for note in notes:
+            self.sendRemind( note )
 
     ## utils funcs
 
@@ -317,9 +326,8 @@ class RemindBot:
         return utc_delta_sec
 
     def pushNote(self, note):
-        for i in range(1000):
-            uid = self.db.saveNote( note )
-            self.db.saveTimeStamp( note.timestamp, uid )
+        uid = self.db.saveNote( note )
+        self.db.saveTimeStamp( note.timestamp, uid )
 
     def parseUTC(self, val):
         val = val.split(":")
