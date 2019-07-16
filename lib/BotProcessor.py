@@ -5,7 +5,7 @@ import os
 
 from .BotLogger import BotLogger
 from .Utils import min_ping_host
-from lib.SettingsManager import SettingsManager as SM
+from lib.SettingsManager import SM
 from .Utils import TOKEN_DEF_PATH
 
 class TelegramBotAPI:
@@ -33,16 +33,16 @@ class BotProcessor:
         self.process_status = self.get_me() is not False
 
     def load_settings(self):
-        if SM.get( "net", "use_proxy" ):
-            proxies = {}
-            http_proxys = SM.get( "net", "proxy_list", "http" )
-            https_proxys = SM.get( "net", "proxy_list", "https" )
-
-            http, https = min_ping_host( http_proxys ), min_ping_host( https_proxys )
-
-            if http is not None: proxies["http"] = http
-            else: self.logger.log_warning( "all http proxys is not available" )
+        if SM.https_proxy_it is not None:
+            https_proxys = []
+            while True:
+                isLast, https = next(SM.https_proxy_it)
+                https_proxys.append( https )
+                if isLast: break
             
+            https = min_ping_host( https_proxys ) # remove ping???
+
+            proxies = {}
             if https is not None: proxies["https"] = https
             else: self.logger.log_warning( "all https proxys is not available" )
             

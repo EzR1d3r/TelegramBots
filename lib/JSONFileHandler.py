@@ -86,5 +86,8 @@ class JSONWrapper:
         except (KeyError, TypeError):
             return None
 
+    def __getitem__(self, key):
+        return JSONWrapper( self.__value[key] )
+
     def __call__(self):
         return self.__value
