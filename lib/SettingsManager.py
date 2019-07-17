@@ -7,10 +7,14 @@ SETT_DIR        = os.path.join( projectDir(), "settings" )
 SETT_FULL_PATH  = os.path.join( SETT_DIR, f"{MAIN_FNAME}.json" )
 
 DEF_BOT_SETT = { "net":
-                        {
-                            "use_proxy" : False,
-                            "proxy_list": { "http":[], "https":[] },
-                        }
+                            {
+                                "use_proxy" : False,
+                                "proxy_list": { "http":[], "https":[] },
+                            },
+                 "common":
+                            {
+                                "load_passed_upd": False
+                            }
                 }
 
 class SettingsManager( JSONFileHandler ):
