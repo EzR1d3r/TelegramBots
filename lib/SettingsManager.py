@@ -13,7 +13,7 @@ DEF_BOT_SETT = { "net":
                             },
                  "common":
                             {
-                                "load_passed_upd": False
+                                "skip_passed_upd": True
                             }
                 }
 

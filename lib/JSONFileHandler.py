@@ -60,7 +60,7 @@ class JSONFileHandler:
         obj[ keys[-1] ] = value
         self.__save()
 
-    def get(self, *keys, alt_val_expr = lambda:None):
+    def get(self, *keys, alt_val_expr = None):
         '''alt_val_expr is an alternate function for getting
         setting value if it is not present in current settings'''
         try:
@@ -68,11 +68,15 @@ class JSONFileHandler:
             for key in keys:
                 val = val[key]
             return val
+        
         except KeyError:
             try:
                 return alt_val_expr()
             except:
-                return None
+                val = self.__default
+                for key in keys:
+                    val = val[key]
+                return val
 
 
 class JSONWrapper:

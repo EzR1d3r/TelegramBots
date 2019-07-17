@@ -46,7 +46,7 @@ class BotProcessor:
             https = min_ping_host( https_proxys, timeout=0.2 ) # remove ping???
 
             if https is not None: self.set_proxy( https = https )
-            else: self.logger.log_warning( "[ All https proxys is not available ]" )            
+            else: self.logger.log_warning( "[ All https proxys is not available ]" )
 
     def set_proxy(self, http = None, https = None):
         proxies = {}
@@ -82,7 +82,11 @@ class BotProcessor:
             if SM.https_proxy_it is not None:
                 isLast, https = next( SM.https_proxy_it )
                 self.set_proxy( https = https )
-                msg += f"\n[ Using last proxy in the proxy list { https }. ]" if isLast else f"\n[ Trying to switch https proxy on { https }. ]"
+                if isLast:
+                    msg += f"\n[ Using last proxy in the proxy list { https }. ]"
+                else:
+                    broken_https = self.session.proxies["https"]
+                    msg += f"\n[ Problem with proxy { broken_https }. Trying to switch https proxy from on { https }. ]"
 
         except req_ex.HTTPError as ex:
             msg = str(ex).replace( self.token, "*****" )
@@ -157,12 +161,13 @@ class BotProcessor:
                 print( f"Exception {type(ex)} {ex}")
 
     def process(self):
-        while self.get_updates() is None:
+        skip_passed_upd = SM.get( "common", "skip_passed_upd")
+        while skip_passed_upd and self.get_updates() is None:
             pass #clear updates
 
         while self.process_status: #MAIN CYCLE
             updates = self.get_updates()
-            self.handle_updates( updates )
+            if updates is not None: self.handle_updates( updates )
             time.sleep(1)
 
         msg = "Process_status set to False. Exit."
