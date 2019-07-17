@@ -8,6 +8,9 @@ from .Utils import min_ping_host
 from lib.SettingsManager import SM
 from .Utils import TOKEN_DEF_PATH
 
+req_ex = requests.exceptions
+
+
 class TelegramBotAPI:
     def __init__ (self, telegram_api_url, token):
         #not all available commands
@@ -42,11 +45,15 @@ class BotProcessor:
             
             https = min_ping_host( https_proxys ) # remove ping???
 
-            proxies = {}
-            if https is not None: proxies["https"] = https
-            else: self.logger.log_warning( "all https proxys is not available" )
-            
-            self.session.proxies = proxies
+            if https is not None: self.set_proxy( https = https )
+            else: self.logger.log_warning( "[ All https proxys is not available ]" )            
+
+    def set_proxy(self, http = None, https = None):
+        proxies = {}
+        if http is not None: proxies["http"] = http
+        if https is not None: proxies["https"] = https
+        print( proxies )
+        self.session.proxies = proxies
  
     def load_token(self, tokenPath = None):
         if tokenPath is None: tokenPath = TOKEN_DEF_PATH
@@ -56,16 +63,28 @@ class BotProcessor:
                 t = file.read()
             return t
         except:
-            self.logger.log_error(f"cant read token-file: {tokenPath}")
+            self.logger.log_error(f"[ Cant read token-file: {tokenPath} ]")
             raise
 
     def __get(self, url, **kwargs):
         try:
             return self.session.get( url, **kwargs) #TODO pick SSLError (msg: perhaps need proxy)
+        except req_ex.SSLError as ex:
+            msg = str(ex).replace( self.token, "*****" )
+            msg += "\n[ Make sure the telegram was not blocked by your provider. Use proxy then. ]"
+        
+        except (req_ex.ConnectTimeout, req_ex.ProxyError ) as ex:
+            msg = str(ex).replace( self.token, "*****" )
+            if SM.https_proxy_it is not None:
+                isLast, https = next( SM.https_proxy_it )
+                self.set_proxy( https = https )
+                msg += f"\n[ Using last proxy in the proxy list { https }. ]" if isLast else f"\n[ Trying to switch https proxy on { https }. ]"
+                
         except Exception as ex:
             msg = str(ex).replace( self.token, "*****" )
-            self.logger.log_error( msg )
-            print (msg)
+        
+        self.logger.log_error( msg )
+        print (msg)
 
     def __post(self, url, data=None, json=None, **kwargs):
         try:
