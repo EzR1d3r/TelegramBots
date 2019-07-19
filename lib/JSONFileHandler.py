@@ -24,11 +24,11 @@ class JSONFileHandler:
                 self.__dict_obj = json.load( read_file )
 
         except FileNotFoundError as error:
-            print( f"Warning. File {self.__path} not found. It will create when save method call." )
+            print( f"[ Warning. File {self.__path} was not found. It will create when save method call. ]" )
 
         except json.decoder.JSONDecodeError as error:
             self.__file_damaged = True
-            print( f"Settings file damaged '{ self.__path }' : { error }!" )                    
+            print( f"[ Error: json file is damaged '{ self.__path }' : { error }! ]" )                    
 
         except Exception as error:
             print( error )
@@ -44,7 +44,7 @@ class JSONFileHandler:
         if self.__file_damaged:
             dt = datetime_std_format(time_sep="-")
             path = os.path.join( self.__dir_name, f"{self.__basename}_cached_{dt}.json" )
-            print (f"Warning: Settings file {self.__path} is damaged.\n Saved as {path}")
+            print (f"[ Warning: Settings file {self.__path} is damaged.\n Saved as {path} ]")
 
         with open( path, "w") as f:
             json.dump(self.__dict_obj, f, indent=4)

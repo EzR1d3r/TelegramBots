@@ -86,7 +86,7 @@ class BotProcessor:
                 if isLast:
                     msg += f"\n[ Problem with proxy { broken_https }. Using last proxy in the proxy list { https }. ]"
                 else:
-                    msg += f"\n[ Problem with proxy { broken_https }. Trying to switch https proxy from on { https }. ]"
+                    msg += f"\n[ Problem with proxy { broken_https }. Trying to switch https proxy on { https }. ]"
 
         except req_ex.HTTPError as ex:
             msg = str(ex).replace( self.token, "*****" )

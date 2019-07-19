@@ -120,25 +120,21 @@ class RedisDBManager():
     def __init__(self):
         self.redisConn = redis.StrictRedis(host='localhost', port = 6379, db = 13,
                                             charset="utf-8", decode_responses=True)
+        self.pipe = self.redisConn.pipeline()
 
         self.lua_script_get_notes = self.redisConn.script_load( lua_script_get_notes )
-
-    def saveTimeStamp(self, timestamp, uid):
-        ts = f"{s_timestamp}:{timestamp}"
-        # print( "SET", ts, threading.current_thread().getName() )
-        self.redisConn.sadd( ts, uid )
-        # self.redisConn.expire( ts, self.gen_ttl( timestamp ) )
 
     def saveNote( self, note ):
         uid = self.redisConn.incr( s_genUID, 1 )
         note_key = f"{s_note}:{uid}"
         usr_notes_key = f"{s_user_notes}:{note.chat_id}"
+        ts_key = f"{s_timestamp}:{note.timestamp}"
         
-        self.redisConn.hmset( note_key, note.sdict() )
-        # self.redisConn.expire( note_key, self.gen_ttl(note.timestamp) )
+        self.pipe.hmset( note_key, note.sdict() )
+        self.pipe.sadd( usr_notes_key, uid ) # TODO remove uid from set after ttl
+        self.pipe.sadd( ts_key, uid )
 
-        self.redisConn.sadd( usr_notes_key, uid ) # TODO remove uid from set after ttl
-        return uid
+        self.pipe.execute()
 
     def saveUsrSetting(self, chat_id, setting, value):
         hash_name = f"{s_user}:{chat_id}"
@@ -147,31 +143,6 @@ class RedisDBManager():
     def getUsrSetting( self, chat_id, setting ):
         hash_name = f"{s_user}:{chat_id}"
         return self.redisConn.hget( hash_name, setting )
-
-    # def getNotes(self, timestamp):
-    #     ts_key = f"{s_timestamp}:{timestamp}"
-    #     uids = self.redisConn.smembers( ts_key )
-    #     # print( "GET", ts, uids, threading.current_thread().getName() )
-
-    #     notes = []
-    #     if uids is not None:
-    #         for uid in uids:
-    #             notes.append( self.redisConn.hgetall( f"{s_note}:{uid}" ) ) # TODO pipeline
-            
-    #     return [ Note.from_dict(note_d) for note_d in notes]
-
-    # def getNotes(self, timestamp):
-    #     ts_key = f"{s_timestamp}:{timestamp}"
-    #     uids = self.redisConn.smembers( ts_key )
-    #     # print( "GET", ts, uids, threading.current_thread().getName() )
-
-    #     pipe = self.redisConn.pipeline()
-    #     if uids is not None:
-    #         for uid in uids:
-    #             pipe.hgetall( f"{s_note}:{uid}" )
-    #     notes = pipe.execute()
-
-    #     return [ Note.from_dict(note_d) for note_d in notes]
 
     def getNotes(self, timestamp):
         notes = self.redisConn.evalsha( self.lua_script_get_notes, 0,
@@ -228,7 +199,7 @@ class RemindBot:
     def handle_text(self, text):
         note = self.parseMsg( text )
         if note:
-            self.pushNote( note )
+            self.db.saveNote( note )
             date = note.datetime( local_utc_sec = self.getUsrUTC() )
             responce_msg = f"Note '{note.message}' set to { date.strftime(f'%d.%m.%Y  %H:%M:%S') }"
         else:
@@ -324,10 +295,6 @@ class RemindBot:
         utc_delta_sec = self.db.getUsrSetting( chat_id, "UTC" )
         utc_delta_sec = int ( utc_delta_sec )
         return utc_delta_sec
-
-    def pushNote(self, note):
-        uid = self.db.saveNote( note )
-        self.db.saveTimeStamp( note.timestamp, uid )
 
     def parseUTC(self, val):
         val = val.split(":")
