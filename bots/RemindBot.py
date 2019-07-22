@@ -39,16 +39,20 @@ for k, v in mult.items():
         mult_dict[unit] = k
 
 # EVAL script 0 s_timestamp timestamp s_note
-lua_script_get_notes = "\
-local ts_key = ARGV[1]..':'..ARGV[2]\n\
-local uids = redis.call('smembers', ts_key)\n\
-local notes = {}\n\
-for i = 1, #uids do\n\
-    local note_key = ARGV[3]..':'..uids[i]\n\
-    print(note_key)\n\
-    notes[i] = redis.call( 'hgetall', note_key )\n\
-    end\n\
+lua_script_get_notes = "                            \
+local ts_key = ARGV[1]..':'..ARGV[2]\n              \
+local uids = redis.call('smembers', ts_key)\n       \
+local notes = {}\n                                  \
+for i = 1, #uids do\n                               \
+    local note_key = ARGV[3]..':'..uids[i]\n        \
+    notes[i] = redis.call( 'hgetall', note_key )\n  \
+    end\n                                           \
 return notes"
+
+# EVAL script 1 usr_notes_key
+lua_script_get_usr_notes = "                                \
+local usr_notes_uids = redis.call( 'smembers', KEYS[1] )\n  \
+return usr_notes_uids"
 
 
 ###################################################################
@@ -122,17 +126,24 @@ class RedisDBManager():
                                             charset="utf-8", decode_responses=True)
         self.pipe = self.redisConn.pipeline()
 
-        self.lua_script_get_notes = self.redisConn.script_load( lua_script_get_notes )
+        self.sha_get_notes     = self.redisConn.script_load( lua_script_get_notes )
+        self.sha_get_usr_notes = self.redisConn.script_load( lua_script_get_usr_notes )
 
     def saveNote( self, note ):
         uid = self.redisConn.incr( s_genUID, 1 )
         note_key = f"{s_note}:{uid}"
         usr_notes_key = f"{s_user_notes}:{note.chat_id}"
         ts_key = f"{s_timestamp}:{note.timestamp}"
-        
+        ttl = self.gen_ttl( note.timestamp )
+
         self.pipe.hmset( note_key, note.sdict() )
-        self.pipe.sadd( usr_notes_key, uid ) # TODO remove uid from set after ttl
+        self.pipe.expire( note_key, ttl )
+        
+        self.pipe.sadd( usr_notes_key, uid )
+        self.pipe.expire( usr_notes_key, ttl ) # могут накапливаться недействительные uid
+        
         self.pipe.sadd( ts_key, uid )
+        self.pipe.expire( ts_key, ttl )
 
         self.pipe.execute()
 
@@ -145,10 +156,15 @@ class RedisDBManager():
         return self.redisConn.hget( hash_name, setting )
 
     def getNotes(self, timestamp):
-        notes = self.redisConn.evalsha( self.lua_script_get_notes, 0,
+        notes = self.redisConn.evalsha( self.sha_get_notes, 0,
                                      s_timestamp, timestamp, s_note )
 
         return [ Note.from_list(note_l) for note_l in notes ]
+
+    def getUsrNotes(self, chat_id):
+        usr_notes_key = f"{s_user_notes}:{chat_id}"
+        notes_uids = self.redisConn.evalsha( self.sha_get_usr_notes, 1, usr_notes_key )
+        return notes_uids
 
     def gen_ttl(self, utc_timestamp):
         return round (utc_timestamp - dt.datetime.utcnow().timestamp() + 20)
@@ -162,12 +178,13 @@ class RemindBot:
         #start - Greetings
         #help - Description of available methods to make a note
         #timezone - Set your timezone
+        #my_notes - List of your notes
 
         self.commands = {
                             "/start"       : self.cmd_start,
                             "/timezone"    : self.cmd_timezone,
                             "/help"        : self.cmd_help,
-                            # "/my_notes"    : self.cmd_my_notes,
+                            "/my_notes"    : self.cmd_my_notes,
                             # "/remove"      : self.cmd_remove,
                             # "/my_settings" : self.cmd_my_settings,
                         }
@@ -358,6 +375,11 @@ class RemindBot:
             self.current_cmd = ""
         
         return {"text":text}
+
+    def cmd_my_notes(self, val=""):
+        chat_id = self.current_update['message']['chat']['id']
+        notes_uids = self.db.getUsrNotes( chat_id )
+        return {"text":f"{ notes_uids }"}
 
     def unknown(self, cmd):
         return {"text":f"Unknown command {cmd}"}

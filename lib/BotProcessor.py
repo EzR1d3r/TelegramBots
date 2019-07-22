@@ -70,7 +70,7 @@ class BotProcessor:
         resp = None
         
         try:
-            resp = self.session.get( url, **kwargs) #TODO pick SSLError (msg: perhaps need proxy)
+            resp = self.session.get( url, **kwargs)
             resp.raise_for_status()
 
         except req_ex.SSLError as ex:
