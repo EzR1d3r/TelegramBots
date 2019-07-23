@@ -49,10 +49,19 @@ for i = 1, #uids do\n                               \
     end\n                                           \
 return notes"
 
-# EVAL script 1 usr_notes_key
+# EVAL script 1 usr_notes_key s_note
 lua_script_get_usr_notes = "                                \
 local usr_notes_uids = redis.call( 'smembers', KEYS[1] )\n  \
-return usr_notes_uids"
+local notes = {}\n                                          \
+for i = 1, #usr_notes_uids do\n                             \
+    local note_key = ARGV[1]..':'..usr_notes_uids[i]\n      \
+    local note = redis.call( 'hgetall', note_key )\n        \
+    if #note == 0 then\n                                    \
+        redis.call('srem', KEYS[1], usr_notes_uids[i])\n    \
+    else\n                                                  \
+        notes[i] = note end\n                               \
+end\n                                                       \
+return notes"
 
 
 ###################################################################
@@ -98,6 +107,10 @@ class Note():
             }
 
         return d
+
+    def __repr__(self):
+        return f"{self.timestamp} {self.message}"
+
 
     @classmethod
     def from_dict(cls, _dict):
@@ -163,8 +176,8 @@ class RedisDBManager():
 
     def getUsrNotes(self, chat_id):
         usr_notes_key = f"{s_user_notes}:{chat_id}"
-        notes_uids = self.redisConn.evalsha( self.sha_get_usr_notes, 1, usr_notes_key )
-        return notes_uids
+        notes = self.redisConn.evalsha( self.sha_get_usr_notes, 1, usr_notes_key, s_note )
+        return [ Note.from_list(note_l) for note_l in notes ]
 
     def gen_ttl(self, utc_timestamp):
         return round (utc_timestamp - dt.datetime.utcnow().timestamp() + 20)
@@ -378,8 +391,8 @@ class RemindBot:
 
     def cmd_my_notes(self, val=""):
         chat_id = self.current_update['message']['chat']['id']
-        notes_uids = self.db.getUsrNotes( chat_id )
-        return {"text":f"{ notes_uids }"}
+        notes = self.db.getUsrNotes( chat_id )
+        return {"text":f"{ notes }"}
 
     def unknown(self, cmd):
         return {"text":f"Unknown command {cmd}"}
