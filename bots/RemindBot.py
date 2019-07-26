@@ -38,7 +38,7 @@ for k, v in mult.items():
     for unit in v:
         mult_dict[unit] = k
 
-# EVAL script 0 s_timestamp timestamp s_note
+# EVAL script 0 s_timestamp timestamp s_note s_uid
 lua_script_get_notes = "                            \
 local ts_key = ARGV[1]..':'..ARGV[2]\n              \
 local uids = redis.call('smembers', ts_key)\n       \
@@ -46,10 +46,11 @@ local notes = {}\n                                  \
 for i = 1, #uids do\n                               \
     local note_key = ARGV[3]..':'..uids[i]\n        \
     notes[i] = redis.call( 'hgetall', note_key )\n  \
-    end\n                                           \
+    notes[i][-1], notes[i][0] = ARGV[4], uids[i]\n  \
+end\n                                               \
 return notes"
 
-# EVAL script 1 usr_notes_key s_note
+# EVAL script 1 usr_notes_key s_note s_uid
 lua_script_get_usr_notes = "                                \
 local usr_notes_uids = redis.call( 'smembers', KEYS[1] )\n  \
 local notes = {}\n                                          \
@@ -59,6 +60,7 @@ for i = 1, #usr_notes_uids do\n                             \
     if #note == 0 then\n                                    \
         redis.call('srem', KEYS[1], usr_notes_uids[i])\n    \
     else\n                                                  \
+        note[-1], note[0] = ARGV[4], usr_notes_uids[i]\n    \
         notes[i] = note end\n                               \
 end\n                                                       \
 return notes"
@@ -69,6 +71,7 @@ return notes"
 
 
 class Note():
+    s_uid     = "u"
     s_ts      = "t"
     s_chat_id = "c"
     s_msg     = "m"
@@ -76,6 +79,7 @@ class Note():
     s_rec_i   = "ri"
 
     init_dict = {
+                    s_uid     : "uid",
                     s_ts      : "timestamp",
                     s_chat_id : "chat_id",
                     s_msg     : "message",
@@ -83,8 +87,9 @@ class Note():
                     s_rec_i   : "rec_interval",
                 }
 
-    def __init__(self, timestamp = -1, chat_id = 0, message = "",
+    def __init__(self, uid = -1, timestamp = -1, chat_id = 0, message = "",
                         recalls = 0, rec_interval = 300):
+        self.uid = uid 
         self.timestamp = timestamp
         self.chat_id = chat_id
         self.message = message
@@ -99,6 +104,7 @@ class Note():
 
     def sdict(self):
         d = {
+                self.s_uid    : self.uid,
                 self.s_ts     : self.timestamp,
                 self.s_chat_id: self.chat_id,
                 self.s_msg    : self.message,
@@ -109,8 +115,10 @@ class Note():
         return d
 
     def __repr__(self):
-        return f"{self.timestamp} {self.message}"
+        return f"{self.datetime()} UTC+00:00 {self.message}"
 
+    def __str__(self):
+        return f"{self.datetime()} UTC+00:00 {self.message}"
 
     @classmethod
     def from_dict(cls, _dict):
@@ -143,19 +151,20 @@ class RedisDBManager():
         self.sha_get_usr_notes = self.redisConn.script_load( lua_script_get_usr_notes )
 
     def saveNote( self, note ):
-        uid = self.redisConn.incr( s_genUID, 1 )
-        note_key = f"{s_note}:{uid}"
+        note_key = f"{s_note}:{note.uid}"
         usr_notes_key = f"{s_user_notes}:{note.chat_id}"
         ts_key = f"{s_timestamp}:{note.timestamp}"
         ttl = self.gen_ttl( note.timestamp )
 
-        self.pipe.hmset( note_key, note.sdict() )
+        d = note.sdict()
+        del d[Note.s_uid]
+        self.pipe.hmset( note_key, d )
         self.pipe.expire( note_key, ttl )
         
-        self.pipe.sadd( usr_notes_key, uid )
+        self.pipe.sadd( usr_notes_key, note.uid )
         self.pipe.expire( usr_notes_key, ttl ) # могут накапливаться недействительные uid
         
-        self.pipe.sadd( ts_key, uid )
+        self.pipe.sadd( ts_key, note.uid )
         self.pipe.expire( ts_key, ttl )
 
         self.pipe.execute()
@@ -170,17 +179,21 @@ class RedisDBManager():
 
     def getNotes(self, timestamp):
         notes = self.redisConn.evalsha( self.sha_get_notes, 0,
-                                     s_timestamp, timestamp, s_note )
+                                        s_timestamp, timestamp, s_note, Note.s_uid )
 
         return [ Note.from_list(note_l) for note_l in notes ]
 
     def getUsrNotes(self, chat_id):
         usr_notes_key = f"{s_user_notes}:{chat_id}"
-        notes = self.redisConn.evalsha( self.sha_get_usr_notes, 1, usr_notes_key, s_note )
+        notes = self.redisConn.evalsha( self.sha_get_usr_notes, 1,
+                                        usr_notes_key, s_note, Note.s_uid )
         return [ Note.from_list(note_l) for note_l in notes ]
 
     def gen_ttl(self, utc_timestamp):
         return round (utc_timestamp - dt.datetime.utcnow().timestamp() + 20)
+
+    def genUID(self):
+        return self.redisConn.incr( s_genUID, 1 )
 
 
 
@@ -261,6 +274,8 @@ class RemindBot:
                 note = self.parse_DayMsgType( text_list_lower, text_list_orig )
             else:
                 note = self.parse_DateMsgType(text_list_lower, text_list_orig)
+
+            note.uid = self.db.genUID()
         except:
             note = Note()
 
@@ -392,7 +407,8 @@ class RemindBot:
     def cmd_my_notes(self, val=""):
         chat_id = self.current_update['message']['chat']['id']
         notes = self.db.getUsrNotes( chat_id )
-        return {"text":f"{ notes }"}
+        notes_str = "\n".join(  [ str(note) for note in notes ]  )
+        return {"text":f"{ notes_str }"}
 
     def unknown(self, cmd):
         return {"text":f"Unknown command {cmd}"}
