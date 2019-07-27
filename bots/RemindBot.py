@@ -45,8 +45,9 @@ local uids = redis.call('smembers', ts_key)\n       \
 local notes = {}\n                                  \
 for i = 1, #uids do\n                               \
     local note_key = ARGV[3]..':'..uids[i]\n        \
-    notes[i] = redis.call( 'hgetall', note_key )\n  \
-    notes[i][-1], notes[i][0] = ARGV[4], uids[i]\n  \
+    local note = redis.call( 'hgetall', note_key )\n  \
+    note[#note + 1], note[#note + 2] = ARGV[4], uids[i]\n    \
+    notes[i] = note\n                                     \
 end\n                                               \
 return notes"
 
@@ -60,8 +61,9 @@ for i = 1, #usr_notes_uids do\n                             \
     if #note == 0 then\n                                    \
         redis.call('srem', KEYS[1], usr_notes_uids[i])\n    \
     else\n                                                  \
-        note[-1], note[0] = ARGV[4], usr_notes_uids[i]\n    \
-        notes[i] = note end\n                               \
+        note[#note + 1], note[#note + 2] = ARGV[2], usr_notes_uids[i]\n    \
+        notes[i] = note\n                                     \
+    end\n                                                   \
 end\n                                                       \
 return notes"
 
@@ -114,11 +116,8 @@ class Note():
 
         return d
 
-    def __repr__(self):
-        return f"{self.datetime()} UTC+00:00 {self.message}"
-
     def __str__(self):
-        return f"{self.datetime()} UTC+00:00 {self.message}"
+        return f"[UID: {self.uid}] {self.datetime().strftime('%d.%m.%Y  %H:%M:%S')} {self.message}"
 
     @classmethod
     def from_dict(cls, _dict):
@@ -180,7 +179,6 @@ class RedisDBManager():
     def getNotes(self, timestamp):
         notes = self.redisConn.evalsha( self.sha_get_notes, 0,
                                         s_timestamp, timestamp, s_note, Note.s_uid )
-
         return [ Note.from_list(note_l) for note_l in notes ]
 
     def getUsrNotes(self, chat_id):
@@ -406,7 +404,11 @@ class RemindBot:
 
     def cmd_my_notes(self, val=""):
         chat_id = self.current_update['message']['chat']['id']
+        usr_utc = self.getUsrUTC( chat_id = chat_id )
+        
         notes = self.db.getUsrNotes( chat_id )
+        for note in notes: note.timestamp += usr_utc #для отображения в локальном времени пользователя
+        
         notes_str = "\n".join(  [ str(note) for note in notes ]  )
         return {"text":f"{ notes_str }"}
 
