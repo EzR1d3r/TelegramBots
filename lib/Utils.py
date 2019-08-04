@@ -9,9 +9,14 @@ def projectDir():
     return sys.path[0]
     # return os.path.abspath( os.curdir ) + "/"
 
-MAIN_FNAME = os.path.basename( __main__.__file__ ).replace( ".py", "" )
 TOKEN_DIR = ".tokens"
+MAIN_FNAME = os.path.basename( __main__.__file__ ).replace( ".py", "" )
+
+BOTS_DIR = "bots"
+BOTS_PATH  = os.path.join( projectDir(), BOTS_DIR )
+
 TOKEN_DEF_PATH = os.path.join( projectDir(), TOKEN_DIR, f"{MAIN_FNAME}.token" )
+
 s_cmd_splitter = " "
 
 def date_std_format():
@@ -52,13 +57,6 @@ def min_ping_host( hosts, timeout = 0.5 ):
             min_ping, IP = avg_ping, ':'.join( host )
 
     return IP
-
-def dictToStr(d):
-    s_dict = {}
-    for k, v in d.items():
-        s_dict[ str(k) ] = str(v)
-    
-    return s_dict
 
 class RepeatTimer(Timer):
     def run(self):

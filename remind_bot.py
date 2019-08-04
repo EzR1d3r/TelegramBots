@@ -1,7 +1,7 @@
 #!/usr/bin/python3.7
 #https://core.telegram.org/bots/api
 
-from bots.RemindBot import RemindBot
+from bots.remind_bot.RemindBot import RemindBot
 from lib.BotProcessor import BotProcessor
 
 def main():

@@ -1,19 +1,11 @@
-import redis
 import time
 import datetime as dt
 
-import threading
-
-from lib.Utils import RepeatTimer, s_cmd_splitter, dictToStr, utc_format
+from .RedisDB_Manager import RedisDBManager
+from .Note import Note
+from lib.Utils import RepeatTimer, s_cmd_splitter, utc_format
 
 ###################################################################
-###################################################################
-
-s_genUID     = "getUID"
-s_timestamp  = "T"
-s_note       = "N"
-s_user       = "U"
-s_user_notes = "UN"
 
 max_td = dt.timedelta( hours = 14 )
 min_td = dt.timedelta( hours = -12 )
@@ -38,161 +30,8 @@ for k, v in mult.items():
     for unit in v:
         mult_dict[unit] = k
 
-# EVAL script 0 s_timestamp timestamp s_note s_uid
-lua_script_get_notes = "                            \
-local ts_key = ARGV[1]..':'..ARGV[2]\n              \
-local uids = redis.call('smembers', ts_key)\n       \
-local notes = {}\n                                  \
-for i = 1, #uids do\n                               \
-    local note_key = ARGV[3]..':'..uids[i]\n        \
-    local note = redis.call( 'hgetall', note_key )\n  \
-    note[#note + 1], note[#note + 2] = ARGV[4], uids[i]\n    \
-    notes[i] = note\n                                     \
-end\n                                               \
-return notes"
-
-# EVAL script 1 usr_notes_key s_note s_uid
-lua_script_get_usr_notes = "                                \
-local usr_notes_uids = redis.call( 'smembers', KEYS[1] )\n  \
-local notes = {}\n                                          \
-for i = 1, #usr_notes_uids do\n                             \
-    local note_key = ARGV[1]..':'..usr_notes_uids[i]\n      \
-    local note = redis.call( 'hgetall', note_key )\n        \
-    if #note == 0 then\n                                    \
-        redis.call('srem', KEYS[1], usr_notes_uids[i])\n    \
-    else\n                                                  \
-        note[#note + 1], note[#note + 2] = ARGV[2], usr_notes_uids[i]\n    \
-        notes[i] = note\n                                     \
-    end\n                                                   \
-end\n                                                       \
-return notes"
-
 
 ###################################################################
-###################################################################
-
-
-class Note():
-    s_uid     = "u"
-    s_ts      = "t"
-    s_chat_id = "c"
-    s_msg     = "m"
-    s_rec     = "r"
-    s_rec_i   = "ri"
-
-    init_dict = {
-                    s_uid     : "uid",
-                    s_ts      : "timestamp",
-                    s_chat_id : "chat_id",
-                    s_msg     : "message",
-                    s_rec     : "recalls",
-                    s_rec_i   : "rec_interval",
-                }
-
-    def __init__(self, uid = -1, timestamp = -1, chat_id = 0, message = "",
-                        recalls = 0, rec_interval = 300):
-        self.uid = uid 
-        self.timestamp = timestamp
-        self.chat_id = chat_id
-        self.message = message
-        self.recalls = recalls #пока не используется
-        self.rec_interval = rec_interval #пока не используется
-
-    def datetime(self, local_utc_sec = 0):
-        return dt.datetime.fromtimestamp(self.timestamp) + dt.timedelta(seconds = local_utc_sec)
-
-    def local(self, local_utc_sec):
-        return self.timestamp + local_utc_sec
-
-    def sdict(self):
-        d = {
-                self.s_uid    : self.uid,
-                self.s_ts     : self.timestamp,
-                self.s_chat_id: self.chat_id,
-                self.s_msg    : self.message,
-                self.s_rec    : self.recalls,
-                self.s_rec_i  : self.rec_interval,
-            }
-
-        return d
-
-    def __str__(self):
-        return f"[UID: {self.uid}] {self.datetime().strftime('%d.%m.%Y  %H:%M:%S')} {self.message}"
-
-    @classmethod
-    def from_dict(cls, _dict):
-        kwargs = {}
-        for k, v in _dict.items(): #заменяем сокращенные ключи полными именами полей
-            v = int(v) if v.isdigit() else v
-            kwargs[ cls.init_dict[k] ] = v
-
-        return Note(**kwargs )
-
-    @classmethod
-    def from_list(cls, _list):
-        d = {}
-        for i in range( 0, len(_list), 2 ):
-            d[ _list[i] ] = _list[i+1]
-
-        return cls.from_dict( d )
-
-    def __bool__(self):
-        return self.timestamp != -1
-
-
-class RedisDBManager():
-    def __init__(self):
-        self.redisConn = redis.StrictRedis(host='localhost', port = 6379, db = 13,
-                                            charset="utf-8", decode_responses=True)
-        self.pipe = self.redisConn.pipeline()
-
-        self.sha_get_notes     = self.redisConn.script_load( lua_script_get_notes )
-        self.sha_get_usr_notes = self.redisConn.script_load( lua_script_get_usr_notes )
-
-    def saveNote( self, note ):
-        note_key = f"{s_note}:{note.uid}"
-        usr_notes_key = f"{s_user_notes}:{note.chat_id}"
-        ts_key = f"{s_timestamp}:{note.timestamp}"
-        ttl = self.gen_ttl( note.timestamp )
-
-        d = note.sdict()
-        del d[Note.s_uid]
-        self.pipe.hmset( note_key, d )
-        self.pipe.expire( note_key, ttl )
-        
-        self.pipe.sadd( usr_notes_key, note.uid )
-        self.pipe.expire( usr_notes_key, ttl ) # могут накапливаться недействительные uid
-        
-        self.pipe.sadd( ts_key, note.uid )
-        self.pipe.expire( ts_key, ttl )
-
-        self.pipe.execute()
-
-    def saveUsrSetting(self, chat_id, setting, value):
-        hash_name = f"{s_user}:{chat_id}"
-        self.redisConn.hset( hash_name, setting, value )
-
-    def getUsrSetting( self, chat_id, setting ):
-        hash_name = f"{s_user}:{chat_id}"
-        return self.redisConn.hget( hash_name, setting )
-
-    def getNotes(self, timestamp):
-        notes = self.redisConn.evalsha( self.sha_get_notes, 0,
-                                        s_timestamp, timestamp, s_note, Note.s_uid )
-        return [ Note.from_list(note_l) for note_l in notes ]
-
-    def getUsrNotes(self, chat_id):
-        usr_notes_key = f"{s_user_notes}:{chat_id}"
-        notes = self.redisConn.evalsha( self.sha_get_usr_notes, 1,
-                                        usr_notes_key, s_note, Note.s_uid )
-        return [ Note.from_list(note_l) for note_l in notes ]
-
-    def gen_ttl(self, utc_timestamp):
-        return round (utc_timestamp - dt.datetime.utcnow().timestamp() + 20)
-
-    def genUID(self):
-        return self.redisConn.incr( s_genUID, 1 )
-
 
 
 class RemindBot:
