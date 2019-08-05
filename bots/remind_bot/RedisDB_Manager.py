@@ -11,7 +11,7 @@ s_note       = "N"
 s_user       = "U"
 s_user_notes = "UN"
 
-SCRIPTS_DIR  = "scripts"
+SCRIPTS_DIR  = "lua_scripts"
 SCRIPTS_PATH = os.path.join( BOTS_PATH, MAIN_FNAME, SCRIPTS_DIR )
 
 class RedisDBManager():
