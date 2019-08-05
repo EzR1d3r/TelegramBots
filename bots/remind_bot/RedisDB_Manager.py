@@ -25,7 +25,6 @@ class RedisDBManager():
         get_ts_notes_path = os.path.join( SCRIPTS_PATH, "get_ts_notes.lua" )
         get_usr_notes_path = os.path.join( SCRIPTS_PATH, "get_usr_notes.lua" )
 
-        print( get_ts_notes_path, get_usr_notes_path )
         with open( get_ts_notes_path ) as script_file:
             self.sha_get_notes = self.redisConn.script_load( script_file.read() )
 
@@ -50,6 +49,25 @@ class RedisDBManager():
         self.pipe.expire( ts_key, ttl )
 
         self.pipe.execute()
+
+    def removeNote( self, uid ):
+        note_key = f"{s_note}:{uid}"
+        note = Note.from_dict( self.redisConn.hgetall( note_key ) )
+
+        if note:
+            self.pipe.delete( note_key )
+
+            usr_notes_key = f"{s_user_notes}:{note.chat_id}"
+            self.pipe.srem( usr_notes_key, uid )
+
+            ts_key = f"{s_timestamp}:{note.timestamp}"
+            self.pipe.srem( ts_key, uid )
+
+            self.pipe.execute()
+
+            return True
+
+        return False
 
     def saveUsrSetting(self, chat_id, setting, value):
         hash_name = f"{s_user}:{chat_id}"

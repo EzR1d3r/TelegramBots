@@ -49,7 +49,7 @@ class RemindBot:
                             "/timezone"    : self.cmd_timezone,
                             "/help"        : self.cmd_help,
                             "/my_notes"    : self.cmd_my_notes,
-                            # "/remove"      : self.cmd_remove,
+                            "/remove"      : self.cmd_remove,
                             # "/my_settings" : self.cmd_my_settings,
                         }
 
@@ -256,6 +256,24 @@ class RemindBot:
         
         notes_str = "\n".join(  [ str(note) for note in notes ]  )
         return {"text":f"{ notes_str }"}
+
+    def cmd_remove(self, val=""):
+        chat_id = self.current_update['message']['chat']['id']
+        
+        if val == "":
+            text = "Choose note uid you want to remove:\n"
+            text += self.cmd_my_notes()["text"]
+            self.current_cmd[chat_id] = "/remove"
+        else:
+            bDeleted = self.db.removeNote(val)
+            if bDeleted:
+                text = f"Note {val} deleted."
+            else:
+                text = f"Cant find note with UID {val}."
+            
+            if self.current_cmd.get(chat_id) is not None: del self.current_cmd[chat_id]
+        
+        return {"text":text}
 
     def unknown(self, cmd):
         return {"text":f"Unknown command {cmd}"}
