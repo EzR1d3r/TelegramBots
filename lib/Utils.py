@@ -29,7 +29,6 @@ def datetime_std_format(time_sep=":"):
     return date.strftime(f'%d_%b_%Y_%H{time_sep}%M{time_sep}%S')
 
 def time_std_format(t):
-    print(t)
     return t.strftime( "%H:%M" )
 
 def utc_format(time_delta):

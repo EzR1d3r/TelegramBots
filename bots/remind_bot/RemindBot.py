@@ -42,6 +42,7 @@ class RemindBot:
         #help - Description of available methods to make a note
         #timezone - Set your timezone
         #my_notes - List of your notes
+        #remove - Remove note by UID
 
         self.commands = {
                             "/start"       : self.cmd_start,
@@ -53,7 +54,7 @@ class RemindBot:
                         }
 
         self.current_update = None
-        self.current_cmd = ""
+        self.current_cmd = {}
         self.db = RedisDBManager()
         self.timer = RepeatTimer(1, self.checkNotes)
         self.timer.start()
@@ -61,8 +62,11 @@ class RemindBot:
 
     def handle(self, update):
         self.current_update = update
+        chat_id = self.current_update['message']['chat']['id']
         text = update['message']['text']
-        text = f"{self.current_cmd} {text}" if self.current_cmd else text
+        
+        current_cmd = self.current_cmd.get( chat_id )
+        text = f"{current_cmd} {text}" if current_cmd is not None else text
         resp = self.handele_cmd(text) if text.startswith('/') else self.handle_text(text)
         self.current_update = None
 
@@ -216,6 +220,8 @@ class RemindBot:
         return {"text":msg}
 
     def cmd_timezone(self, val=""):
+        chat_id = self.current_update['message']['chat']['id']
+        
         if val == "":
             text = "Please, tell me your timezene." \
                     "Format is:\n" \
@@ -224,7 +230,7 @@ class RemindBot:
                     "'+2:00' (equal '+2', '2')\n" \
                     "https://en.wikipedia.org/wiki/List_of_time_zones_by_country"
 
-            self.current_cmd = "/timezone"
+            self.current_cmd[chat_id] = "/timezone"
         else:
             try:
                 utc = self.parseUTC( val )
@@ -237,7 +243,7 @@ class RemindBot:
             except RuntimeError as e:
                 text = str(e)
 
-            self.current_cmd = ""
+            if self.current_cmd.get(chat_id) is not None: del self.current_cmd[chat_id]
         
         return {"text":text}
 
