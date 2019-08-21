@@ -35,7 +35,9 @@ class RedisDBManager():
         note_key = f"{s_note}:{note.uid}"
         usr_notes_key = f"{s_user_notes}:{note.chat_id}"
         ts_key = f"{s_timestamp}:{note.timestamp}"
+        
         ttl = self.gen_ttl( note.timestamp )
+        cur_ttl = self.redisConn.ttl( usr_notes_key )
 
         d = note.sdict()
         del d[Note.s_uid]
@@ -43,7 +45,7 @@ class RedisDBManager():
         self.pipe.expire( note_key, ttl )
         
         self.pipe.sadd( usr_notes_key, note.uid )
-        self.pipe.expire( usr_notes_key, ttl ) # могут накапливаться недействительные uid
+        self.pipe.expire( usr_notes_key, (ttl if ttl > cur_ttl else cur_ttl) ) # могут накапливаться недействительные uid
         
         self.pipe.sadd( ts_key, note.uid )
         self.pipe.expire( ts_key, ttl )
@@ -89,7 +91,7 @@ class RedisDBManager():
         return [ Note.from_list(note_l) for note_l in notes ]
 
     def gen_ttl(self, utc_timestamp):
-        return round (utc_timestamp - dt.datetime.utcnow().timestamp() + 20)
+        return round (utc_timestamp - dt.datetime.utcnow().timestamp() + 5)
 
     def genUID(self):
         return self.redisConn.incr( s_genUID, 1 )
