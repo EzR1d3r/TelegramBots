@@ -7,6 +7,7 @@ from lib.BotProcessor import BotProcessor
 def main():
     handler = MIDBot()
     processor = BotProcessor(handler)
+    handler.processor = processor
     processor.process()
 
 if __name__ == '__main__':

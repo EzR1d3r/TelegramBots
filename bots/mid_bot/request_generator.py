@@ -1,5 +1,4 @@
 from typing import NamedTuple
-from urllib import request
 import requests as r
 from time import sleep
 from datetime import datetime
@@ -41,17 +40,19 @@ def make_request_gen(url: str, cookie: str, referer: str):
     is_active = True
 
     while is_active:
-        res = r.get(url, headers=headers, cookies=cookies_dict)
-        find_res = res.text.find(_ABSENT_MSG)
-        has_changes = old_res != res.text
-        old_res = res.text
+        try:
+            res = r.get(url, headers=headers, cookies=cookies_dict)
+        except r.RequestException as e:
+            print(e) # TODO logging
+        else:
+            find_res = res.text.find(_ABSENT_MSG)
+            has_changes = old_res != res.text
+            old_res = res.text
 
-        request_res = RequestResult(has_changes, find_res, res.text)
-        
-        is_active, sleep_time = yield request_res
-        print(is_active, sleep_time, "??")
-
-        sleep(sleep_time)
+            request_res = RequestResult(has_changes, find_res, res.text)
+            
+            is_active, sleep_time = yield request_res
+            sleep(sleep_time)
 
 
 if __name__ == "__main__":
