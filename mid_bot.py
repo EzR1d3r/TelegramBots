@@ -1,7 +1,7 @@
 #!/usr/bin/python3.7
 #https://core.telegram.org/bots/api
 
-from bots.MIDBot import MIDBot
+from bots.mid_bot.MIDBot import MIDBot
 from lib.BotProcessor import BotProcessor
 
 def main():
