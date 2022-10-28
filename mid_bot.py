@@ -1,4 +1,4 @@
-#!/usr/bin/python3.7
+#!/usr/bin/python3
 #https://core.telegram.org/bots/api
 
 from bots.mid_bot.MIDBot import MIDBot
